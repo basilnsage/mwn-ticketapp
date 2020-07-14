@@ -1,13 +1,26 @@
 package errors
 
-type ClientError struct {
-	Code int
-	Status string
+type ClientError interface {
+	Msg() string
+	RespCode() int
 }
 
-func NewClientError(code int, status string) *ClientError {
-	return &ClientError{
-		Code: code,
-		Status: status,
+type BaseError struct {
+	code int
+	status string
+}
+
+func (e BaseError) Msg() string {
+	return e.status
+}
+
+func (e BaseError) RespCode() int {
+	return e.code
+}
+
+func NewBaseError(code int, status string) *BaseError {
+	return &BaseError{
+		code: code,
+		status: status,
 	}
 }
