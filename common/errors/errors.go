@@ -1,26 +1,20 @@
 package errors
 
-type ClientError interface {
+import "net/http"
+
+type XClientError interface {
 	Msg() string
 	RespCode() int
 }
 
-type BaseError struct {
-	code int
-	status string
+type ClientError struct {
+	code string
 }
 
-func (e BaseError) Msg() string {
-	return e.status
+func (ce ClientError) Msg() string {
+	return "unable to process request"
 }
 
-func (e BaseError) RespCode() int {
-	return e.code
-}
-
-func NewBaseError(code int, status string) *BaseError {
-	return &BaseError{
-		code: code,
-		status: status,
-	}
+func (ce ClientError) RespCode() int {
+	return http.StatusBadRequest
 }
