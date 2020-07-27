@@ -1,57 +1,20 @@
 package main
 
 import (
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 )
 
 var (
 	defaultStatus = "unable to process request"
 	defaultCode   = http.StatusBadRequest
+	authDB = "auth"
+	authCollection = "users"
 )
-
-// this should go LAST in the chain of middlewares
-func handleErrors() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// go through errors and determine if they should be logged and/or sent to the client
-		// if there are multiple errors to send to the client, only send the first error
-		var (
-			respStatus string
-			respCode   int
-			eCode      int
-			eStatus    string
-			e          error
-			eType      gin.ErrorType
-		)
-		c.Next()
-		if len(c.Errors) > 0 {
-			respDefined := false
-			respStatus = defaultStatus
-			respCode = defaultCode
-			for _, err := range c.Errors {
-				e = err.Err
-				eType = err.Type
-				eCode = defaultCode
-				switch m := err.Meta.(type) {
-				case ClientError:
-					eCode = m.RespCode()
-					eStatus = m.Msg()
-				}
-				// check if ErrorType public and if a status has already been set
-				if !respDefined && eType == 1<<1 {
-					respCode = eCode
-					respStatus = eStatus
-					respDefined = true
-				}
-				log.Printf("[ERROR] - at middleware, code: %v, err: %v", eCode, e)
-			}
-			c.JSON(respCode, gin.H{"error": respStatus})
-		}
-	}
-}
 
 func main() {
 	router := gin.Default()
@@ -65,7 +28,22 @@ func main() {
 	// use generic error-handling middleware
 	router.Use(handleErrors())
 	UseUserRoutes(router)
+
+	// init mongo cluster connection
+	err := InitMongo()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	log.Print("mongo client initialized")
+	defer func() {
+		if err := CloseClient(); err != nil {
+			panic(err)
+		}
+	}()
+
 	if err := router.Run(":4000"); err != nil {
 		log.Printf("unable to run auth service")
+	} else {
+		log.Print("gin server running and waiting for requests")
 	}
 }

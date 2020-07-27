@@ -2,6 +2,6 @@ FROM golang:alpine
 
 WORKDIR auth
 COPY . .
-RUN go build auth.go
+RUN go build .
 
 CMD ["./auth"]

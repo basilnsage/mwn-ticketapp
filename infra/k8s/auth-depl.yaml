@@ -15,7 +15,8 @@ spec:
     spec:
       containers:
         - name: auth
-          image: basilnsage/tickets.auth
+          image: basilnsage/mwn-ticketapp.auth:latest
+          imagePullPolicy: Never
 ---
 apiVersion: v1
 kind: Service
