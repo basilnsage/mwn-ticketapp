@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	defaultStatus = "unable to process request"
-	defaultCode   = http.StatusBadRequest
-	authDB = "auth"
+	defaultStatus  = "unable to process request"
+	defaultCode    = http.StatusBadRequest
+	authDB         = "auth"
 	authCollection = "users"
 )
 

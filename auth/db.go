@@ -15,7 +15,7 @@ var client *mongo.Client
 func InitMongo() error {
 	var err error
 	opts := options.Client().ApplyURI("mongodb://auth-mongo-svc:27017")
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client, err = mongo.Connect(ctx, opts)
 	if err != nil {
@@ -29,7 +29,7 @@ func InitMongo() error {
 }
 
 func CloseClient() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return client.Disconnect(ctx)
 }

@@ -8,5 +8,6 @@ require (
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-playground/validator v9.31.0+incompatible
 	go.mongodb.org/mongo-driver v1.3.5
+	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	google.golang.org/protobuf v1.25.0
 )

@@ -1,23 +1,24 @@
 package main
 
-import(
+import (
 	"context"
 	"errors"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"strings"
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/go-playground/validator"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/protobuf/proto"
 )
 
 var v = validator.New()
 
 type user struct {
-	Email string `validate:"required,email"`
+	Email    string `validate:"required,email"`
 	Password string `validate:"required,passwd"`
 }
 
@@ -46,8 +47,12 @@ func (u user) validate() error {
 	return nil
 }
 
+func (u user) passwdHash() ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+}
+
 func (u user) exists(mClient *mongo.Client) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	users := mClient.Database(authDB).Collection(authCollection)
 	err := users.FindOne(ctx, bson.M{"username": u.Email}).Decode(&user{})
@@ -62,10 +67,14 @@ func (u user) exists(mClient *mongo.Client) (bool, error) {
 
 // write/persist user to DB
 func (u user) write(mClient *mongo.Client) (*mongo.InsertOneResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	users := mClient.Database(authDB).Collection(authCollection)
-	res, err := users.InsertOne(ctx, bson.M{"username": u.Email, "password": u.Password})
+	hash, err := u.passwdHash()
+	if err != nil {
+		return &mongo.InsertOneResult{}, err
+	}
+	res, err := users.InsertOne(ctx, bson.M{"username": u.Email, "password": hash})
 	if err != nil {
 		return &mongo.InsertOneResult{}, err
 	}
