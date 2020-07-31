@@ -61,7 +61,7 @@ func (u user) exists(mClient *mongo.Client) (bool, error) {
 	} else if err != nil {
 		return true, err
 	} else {
-		return false, nil
+		return true, nil
 	}
 }
 
