@@ -8,7 +8,7 @@ import (
 
 func main() {
 	user := protos.SignIn{
-		Username: "foo@example.com",
+		Username: "foo@@example.com",
 		Password: "876543210",
 	}
 	data, _ := proto.Marshal(&user)

@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-playground/validator/non-standard/validators"
 	"strings"
 	"time"
 
@@ -13,15 +13,36 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
 
 var v = validator.New()
 
+func initValidator() error {
+	err := v.RegisterValidation("passwd", func(fl validator.FieldLevel) bool {
+		return len(fl.Field().String()) >= 8
+	})
+	if err != nil {
+		return fmt.Errorf("validator.RegisterValidation: %v", err)
+	}
+	err = v.RegisterValidation("strnonblank", func(fl validator.FieldLevel) bool {
+		return fl.Field().String() != ""
+	})
+	if err != nil {
+		return fmt.Errorf("validator.RegisterValidation: %v", err)
+	}
+	return nil
+}
+
 type user struct {
-	Email    string `validate:"required,email"`
-	Password string `validate:"required,passwd"`
-	uid interface{}
+	Email    string `validate:"required,email,strnonblank"`
+	Password string `validate:"required,passwd,strnonblank"`
+	uid      interface{}
+}
+type privClaims struct {
+	Email string      `json:"email"`
+	UID   interface{} `json:"uid"`
 }
 
 func newUser(email string, password string) *user {
@@ -33,16 +54,12 @@ func newUser(email string, password string) *user {
 }
 
 func (u user) validate(exempt map[string]interface{}) error {
-	_ = v.RegisterValidation("passwd", func(f validator.FieldLevel) bool {
-		return len(f.Field().String()) >= 8
-	})
-	_ = v.RegisterValidation("nonblank", validators.NotBlank)
 	err := v.Struct(u)
 	if err != nil {
 		invalidTags := make([]string, 0)
 		for _, err := range err.(validator.ValidationErrors) {
 			tag := err.Tag()
-			if _, ok := exempt[tag]; ok {
+			if _, ok := exempt[tag]; !ok {
 				invalidTags = append(invalidTags, err.Tag())
 			}
 		}
@@ -75,7 +92,6 @@ func (u user) passOk(mClient *mongo.Client) (bool, error) {
 	return true, nil
 }
 
-
 func (u user) exists(mClient *mongo.Client) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -99,7 +115,6 @@ func (u *user) write(mClient *mongo.Client) (*mongo.InsertOneResult, error) {
 	if err != nil {
 		return &mongo.InsertOneResult{}, err
 	}
-	fmt.Println(hash)
 	res, err := users.InsertOne(ctx, bson.M{"username": u.Email, "password": hash})
 	if err != nil {
 		return &mongo.InsertOneResult{}, err
@@ -112,16 +127,30 @@ func (u user) jwt() (string, error) {
 	if sharedSigner == nil {
 		return "", errors.New("user.jwt: JWT signer uninitialized, cannot sign JWT")
 	}
-	privClaims := struct {
-		Email string `json:"email"`
-		UID interface{} `json:"uid"`
-	}{
+	claims := privClaims{
 		u.Email,
 		u.uid,
 	}
-	raw, err := jwt.Signed(sharedSigner).Claims(privClaims).CompactSerialize()
+	raw, err := jwt.Signed(sharedSigner).Claims(claims).CompactSerialize()
 	if err != nil {
 		return "", fmt.Errorf("user.jwt: %v", err)
 	}
 	return raw, nil
+}
+
+func verifyJWT(token string) (*privClaims, error) {
+	jws, err := jose.ParseSigned(token)
+	if err != nil {
+		return nil, fmt.Errorf("jose.ParseSigned: %v", err)
+	}
+	data, err := jws.Verify(sharedPass)
+	if err != nil {
+		return nil, fmt.Errorf("jose.JSONWebSignature.Verify: %v", err)
+	}
+	claims := privClaims{}
+	if err = json.Unmarshal(data, &claims); err != nil {
+		return nil, fmt.Errorf("json.Unmarshal: %v", err)
+	}
+	return &claims, nil
+
 }

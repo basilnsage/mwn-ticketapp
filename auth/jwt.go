@@ -9,6 +9,7 @@ import (
 )
 
 var sharedSigner jose.Signer
+var sharedPass []byte
 
 func initSigner() error {
 	var err error
@@ -20,6 +21,6 @@ func initSigner() error {
 	if err != nil {
 		return fmt.Errorf("jose.NewSigner: %v", err)
 	}
+	sharedPass = []byte(pass)
 	return nil
 }
-

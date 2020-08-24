@@ -24,6 +24,22 @@ func userFromPayload(ctx *gin.Context) (*user, int, string, error) {
 	return userObj, http.StatusOK, "credentials parsed", nil
 }
 
+func whoami(ctx *gin.Context) (*privClaims, error) {
+	jwt, err := ctx.Cookie("auth-jwt")
+	if err != nil {
+		cError := NewBaseError(http.StatusUnauthorized, "unauthorized")
+		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
+		return nil, err
+	}
+	data, err := verifyJWT(jwt)
+	if err != nil {
+		cError := NewBaseError(http.StatusUnauthorized, "unauthorized")
+		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
+		return nil, err
+	}
+	return data, nil
+}
+
 func signin(ctx *gin.Context) error {
 	newUser, statusCode, status, err := userFromPayload(ctx)
 	if err != nil {
@@ -45,7 +61,7 @@ func signin(ctx *gin.Context) error {
 	if !exists {
 		err = errors.New("user does not exist")
 		cError := NewBaseError(http.StatusNotFound, "invalid credentials")
-		_ = ctx.Error(err).SetType(1 << 1 ).SetMeta(*cError)
+		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
 		return err
 	}
 	if passwordOk, err := newUser.passOk(GetClient()); err != nil {
@@ -115,23 +131,32 @@ func signupUser(c *gin.Context) error {
 }
 
 func UseUserRoutes(r *gin.Engine) {
+	// init user validator
+	if err := initValidator(); err != nil {
+		log.Fatalf("UseUserRoutes.initValidtor: %v", err)
+	}
 	users := r.Group("/api/users")
 	// TODO: break out payload validation into middlewear?
 	// keep following along with class first and see what they do about /signout and /signup
 	// how they implement these routes will affect how to organize/apply the middlewear
 	{
 		users.GET("/whoami", func(ctx *gin.Context) {
-			ctx.String(http.StatusOK, "user whoami not implemented")
+			if resp, err := whoami(ctx); err != nil {
+				log.Printf("/api/users/whoami: %v", err)
+			} else {
+				ctx.JSON(http.StatusOK, resp)
+			}
 		})
-		users.GET("/signin", func(ctx *gin.Context) {
+		users.POST("/signin", func(ctx *gin.Context) {
 			if err := signin(ctx); err != nil {
 				log.Printf("/api/users/signin: %v", err)
 			} else {
-				ctx.String(http.StatusCreated, "signin successful")
+				ctx.String(http.StatusOK, "signin successful")
 			}
 		})
 		users.GET("/signout", func(ctx *gin.Context) {
-			ctx.String(http.StatusOK, "user sign out not implemented")
+			ctx.SetCookie("auth-jwt", "", -1, "", "", false, true)
+			ctx.Status(http.StatusOK)
 		})
 		users.POST("/signup", func(ctx *gin.Context) {
 			if err := signupUser(ctx); err != nil {
