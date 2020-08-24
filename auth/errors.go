@@ -1,17 +1,19 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"errors"
 	"log"
+
+	"github.com/gin-gonic/gin"
 )
 
+// ClientError defines methods for shared error reporting
 type ClientError interface {
 	Msg() string
 	RespCode() int
 }
 
-// should implement github.com/basilnsage/mwn-ticketapp/common/errors.ClientError
-// seems like this ^ is not recommended, including the interface in the package until it needs to be shared
+// BaseError implements ClientError for the most basic errors
 type BaseError struct {
 	code   int
 	status string
@@ -23,6 +25,10 @@ func (e BaseError) Msg() string {
 
 func (e BaseError) RespCode() int {
 	return e.code
+}
+
+func (e BaseError) Error() error {
+	return errors.New(e.status)
 }
 
 func NewBaseError(code int, status string) *BaseError {

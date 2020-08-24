@@ -12,11 +12,21 @@ spec:
     metadata:
       labels:
         app: auth
+        service: auth
     spec:
       containers:
         - name: auth
           image: basilnsage/mwn-ticketapp.auth:latest
           imagePullPolicy: Never
+          resources:
+            limits:
+              memory: 256Mi
+          env:
+            - name: JWT_SIGN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: sign-key
 ---
 apiVersion: v1
 kind: Service

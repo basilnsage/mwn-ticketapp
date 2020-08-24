@@ -41,6 +41,11 @@ func main() {
 		}
 	}()
 
+	// init signer
+	if err := initSigner(); err != nil {
+		log.Fatal(err.Error())
+	}
+
 	if err := router.Run(":4000"); err != nil {
 		log.Printf("unable to run auth service")
 	} else {
