@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
-	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 )
 
@@ -40,7 +38,7 @@ type user struct {
 	Password string `validate:"required,passwd,strnonblank"`
 	uid      interface{}
 }
-type privClaims struct {
+type PrivClaims struct {
 	Email string      `json:"email"`
 	UID   interface{} `json:"uid"`
 }
@@ -127,7 +125,7 @@ func (u user) jwt() (string, error) {
 	if sharedSigner == nil {
 		return "", errors.New("user.jwt: JWT signer uninitialized, cannot sign JWT")
 	}
-	claims := privClaims{
+	claims := PrivClaims{
 		u.Email,
 		u.uid,
 	}
@@ -136,21 +134,4 @@ func (u user) jwt() (string, error) {
 		return "", fmt.Errorf("user.jwt: %v", err)
 	}
 	return raw, nil
-}
-
-func verifyJWT(token string) (*privClaims, error) {
-	jws, err := jose.ParseSigned(token)
-	if err != nil {
-		return nil, fmt.Errorf("jose.ParseSigned: %v", err)
-	}
-	data, err := jws.Verify(sharedPass)
-	if err != nil {
-		return nil, fmt.Errorf("jose.JSONWebSignature.Verify: %v", err)
-	}
-	claims := privClaims{}
-	if err = json.Unmarshal(data, &claims); err != nil {
-		return nil, fmt.Errorf("json.Unmarshal: %v", err)
-	}
-	return &claims, nil
-
 }

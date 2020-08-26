@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/basilnsage/mwn-ticketapp/auth/routes"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
@@ -22,22 +23,6 @@ func userFromPayload(ctx *gin.Context) (*user, int, string, error) {
 	}
 	userObj := newUser(userProto.Username, userProto.Password)
 	return userObj, http.StatusOK, "credentials parsed", nil
-}
-
-func whoami(ctx *gin.Context) (*privClaims, error) {
-	jwt, err := ctx.Cookie("auth-jwt")
-	if err != nil {
-		cError := NewBaseError(http.StatusUnauthorized, "unauthorized")
-		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return nil, err
-	}
-	data, err := verifyJWT(jwt)
-	if err != nil {
-		cError := NewBaseError(http.StatusUnauthorized, "unauthorized")
-		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return nil, err
-	}
-	return data, nil
 }
 
 func signin(ctx *gin.Context) error {
@@ -140,13 +125,7 @@ func UseUserRoutes(r *gin.Engine) {
 	// keep following along with class first and see what they do about /signout and /signup
 	// how they implement these routes will affect how to organize/apply the middlewear
 	{
-		users.GET("/whoami", func(ctx *gin.Context) {
-			if resp, err := whoami(ctx); err != nil {
-				log.Printf("/api/users/whoami: %v", err)
-			} else {
-				ctx.JSON(http.StatusOK, resp)
-			}
-		})
+		users.GET("/whoami", routes.Whoami)
 		users.POST("/signin", func(ctx *gin.Context) {
 			if err := signin(ctx); err != nil {
 				log.Printf("/api/users/signin: %v", err)

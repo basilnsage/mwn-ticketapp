@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/basilnsage/mwn-ticketapp/auth/errors"
+	"github.com/basilnsage/mwn-ticketapp/auth/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +28,7 @@ func main() {
 		MaxAge:        12 * time.Hour,
 	}))
 	// use generic error-handling middleware
-	router.Use(handleErrors())
+	router.Use(errors.HandleErrors())
 	UseUserRoutes(router)
 
 	// init mongo cluster connection
@@ -45,6 +47,10 @@ func main() {
 	if err := initSigner(); err != nil {
 		log.Fatal(err.Error())
 	}
+	if err := jwt.InitSigner(); err != nil {
+		log.Fatal(err.Error())
+	}
+	jwt.Sign()
 
 	if err := router.Run(":4000"); err != nil {
 		log.Printf("unable to run auth service")

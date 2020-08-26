@@ -1,15 +1,21 @@
-package main
+package errors
 
 import (
 	"errors"
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
+var (
+	defaultStatus  = "unable to process request"
+	defaultCode    = http.StatusBadRequest
+)
+
 // TODO: instead of defining a custom interface, what about implementing the `error` interface?
 // could pass errors directly into ctx.Error(...) instead of meta
-// not sure how to get both error code and error message out of that though, just extend `error` interface?gg
+// not sure how to get both error code and error message out of that though, just extend `error` interface?
 // ClientError defines methods for shared error reporting
 type ClientError interface {
 	Msg() string
@@ -41,7 +47,7 @@ func NewBaseError(code int, status string) *BaseError {
 	}
 }
 
-func handleErrors() gin.HandlerFunc {
+func HandleErrors() gin.HandlerFunc {
 	// go through errors and determine if they should be logged and/or sent to the client
 	// if there are multiple errors to send to the client, only send the first error
 	return func(c *gin.Context) {
