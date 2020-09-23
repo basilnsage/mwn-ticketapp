@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/basilnsage/mwn-ticketapp/auth/routes"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
@@ -17,8 +16,7 @@ func userFromPayload(ctx *gin.Context) (*user, int, string, error) {
 		return nil, http.StatusBadRequest, "please provide a username and password", err
 	}
 	userProto := &protos.SignIn{}
-	err = proto.Unmarshal(data, userProto)
-	if err != nil {
+	if err = proto.Unmarshal(data, userProto); err != nil {
 		return nil, http.StatusBadRequest, "unable to parse provided credentials", err
 	}
 	userObj := newUser(userProto.Username, userProto.Password)
@@ -115,17 +113,19 @@ func signupUser(c *gin.Context) error {
 	return nil
 }
 
-func UseUserRoutes(r *gin.Engine) {
+func UseUserRoutes(r *gin.Engine, conf config) {
 	// init user validator
 	if err := initValidator(); err != nil {
 		log.Fatalf("UseUserRoutes.initValidtor: %v", err)
 	}
 	users := r.Group("/api/users")
-	// TODO: break out payload validation into middlewear?
+	// TODO: break out payload validation into middleware?
 	// keep following along with class first and see what they do about /signout and /signup
 	// how they implement these routes will affect how to organize/apply the middlewear
 	{
-		users.GET("/whoami", routes.Whoami)
+		users.GET("/whoami", func(ctx *gin.Context) {
+			Whoami(ctx, conf.authValidator)
+		})
 		users.POST("/signin", func(ctx *gin.Context) {
 			if err := signin(ctx); err != nil {
 				log.Printf("/api/users/signin: %v", err)

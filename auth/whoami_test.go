@@ -1,4 +1,4 @@
-package routes
+package main
 
 import (
 	"encoding/json"
@@ -6,43 +6,51 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"github.com/basilnsage/mwn-ticketapp/auth/jwt"
+	"github.com/basilnsage/mwn-ticketapp/auth/token"
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-cmp/cmp"
 )
 
 var (
-	sampleHeader = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9"
-	samplePayload = "eyJlbWFpbCI6ImZvb0BleGFtcGxlLmNvbSIsInVpZCI6IjVmNDdlYzJjODZlZDNlZjk5MWNkZmQ5NCJ9"
-	sampleSig = "aF4HEksOE3zmyQiGNRS-yGV79oZEin-ESHsQx_WGcJNnuGKEXWyPTXUBYyL-wg7UEjrWp1MbMrMvPt4Yvw-mtg"
-	sampleClaims = users.PrivClaims{
+	key = []byte("password")
+	// { alg: HS256, typ: JWT }
+	header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+	// { email: foo@example.com, uid: 5f47ec2c86ed3ef991cdfd94 }
+	payload = "eyJlbWFpbCI6ImZvb0BleGFtcGxlLmNvbSIsInVpZCI6IjVmNDdlYzJjODZlZDNlZjk5MWNkZmQ5NCJ9"
+	// HS256 signature with key "password"
+	sig = "jrgWQhw5YFXm01UVbZ-ZWEpJgmM_iNXwwgPG4pJ6bcQ"
+	sampleClaims = users.Claims{
 		Email: "foo@example.com",
 		UID: "5f47ec2c86ed3ef991cdfd94",
 	}
-	sampleJWT = fmt.Sprintf("%s.%s.%s", sampleHeader, samplePayload, sampleSig)
+	jwtString = fmt.Sprintf("%s.%s.%s", header, payload, sig)
 	cookie = http.Cookie{
-		Name: "auth-jwt",
-		Value: sampleJWT,
+		Name:  "auth-jwt",
+		Value: jwtString,
 	}
 )
 
-func setup() error {
-	err := os.Setenv("JWT_SIGN_KEY", "password")
+func setup(t *testing.T) (*token.JWTValidator, *gin.Engine) {
+	// create the JWT validator
+	jwtValidator, err:= token.NewJWTValidator(key, "HS256")
 	if err != nil {
-		return err
+		t.Fatalf("token.NewJWTValidator: %v", err)
 	}
-	err = jwt.InitSigner()
-	if err != nil {
-		return err
-	}
-	return nil
+
+	eng := gin.Default()
+	eng.Use(func (ctx *gin.Context) {
+		ctx.Next()
+		if len(ctx.Errors) > 0 {
+			t.Errorf("ctx error: %v", ctx.Errors[0])
+		}
+	})
+	return jwtValidator, eng
 }
 
-func parseBody(receiver *users.PrivClaims, resp *http.Response) error {
+func parseBody(receiver *users.Claims, resp *http.Response) error {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("ioutil.ReadAll: %v", err)
@@ -54,30 +62,35 @@ func parseBody(receiver *users.PrivClaims, resp *http.Response) error {
 }
 
 func TestWhoami(t *testing.T) {
-	// initial setup to get JWT verification to work
-	if err := setup(); err != nil {
-		t.Fatalf("whoami_test.setup: %v", err)
-	}
+	gin.SetMode(gin.TestMode)
+	v, eng := setup(t)
 
-	// stand up a test router to actually invoke the Whoami route
+	// stand up a test router and create a test route to invoke Whoami
 	w := httptest.NewRecorder()
-	eng := gin.Default()
-	eng.GET("/test", Whoami)
-	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	eng.GET("/test", func(ctx *gin.Context) {
+		Whoami(ctx, v)
+	})
+
+	// create an HTTP request and send it to the test route
+	req, err := http.NewRequest(http.MethodGet, "/test", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest: %v", err)
+	}
 	req.AddCookie(&cookie)
 	eng.ServeHTTP(w, req)
 
-	// check response
+	// check status
 	resp := w.Result()
 	if w.Code != 200 {
-		t.Errorf("TestWhoami: got %v, want %v", w.Code, 200)
+		t.Errorf("Whoami wrong status code: %v, want %v", w.Code, 200)
 	}
 
-	bodyJson := users.PrivClaims{}
+	// check response body
+	bodyJson := users.Claims{}
 	if err := parseBody(&bodyJson, resp); err != nil {
-		t.Errorf("whoami_test.parseBody: %v", err)
+		t.Errorf("Whoami could not parse resp body: %v", err)
 	}
-	if !cmp.Equal(bodyJson, sampleClaims) {
-		t.Errorf("TestWhoami: got %v, want %v", bodyJson, sampleClaims)
+	if diff := cmp.Diff(sampleClaims, bodyJson); diff != "" {
+		t.Errorf("Whoami: (-want, +got):\n%s", diff)
 	}
 }

@@ -1,34 +1,41 @@
-package routes
+package main
 
 import (
 	"net/http"
 
-	"github.com/basilnsage/mwn-ticketapp/auth/errors"
-	"github.com/basilnsage/mwn-ticketapp/auth/jwt"
+	e "github.com/basilnsage/mwn-ticketapp/auth/errors"
+	"github.com/basilnsage/mwn-ticketapp/auth/token"
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/gin-gonic/gin"
 )
 
+type Claims struct {
+	users.Claims
+}
+
 // Whoami identifies a user by the provided JWT cookie and returns a representation of said user
-func Whoami(ctx *gin.Context) {
-	resp, err := whoami(ctx)
+func Whoami(ctx *gin.Context, validator *token.JWTValidator) {
+	resp, err := userFromRequest(ctx, validator)
 	if err != nil {
-		cError := errors.NewBaseError(http.StatusUnauthorized, "unauthorized")
+		cError := e.NewBaseError(http.StatusUnauthorized, "unauthorized")
 		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
 	} else {
 		ctx.JSON(http.StatusOK, resp)
 	}
 }
 
-func whoami(ctx *gin.Context) (*users.PrivClaims, error) {
-	token, err := ctx.Cookie("auth-jwt")
+func userFromRequest(ctx *gin.Context, validator *token.JWTValidator) (*gin.H, error) {
+	// check for the "auth-jwt" cookie from the request
+	cookie, err := ctx.Cookie("auth-jwt")
 	if err != nil {
 		return nil, err
 	}
-	userClaims := new(users.PrivClaims)
-	err = jwt.Verify(token, userClaims)
+
+	parsedClaims := new(Claims)
+	// attempt to parse the cookie as a JWT
+	_, err = validator.ParseWithClaims(cookie, parsedClaims)
 	if err != nil {
 		return nil, err
 	}
-	return userClaims, nil
+	return &gin.H{"email": parsedClaims.Email, "uid": parsedClaims.UID}, nil
 }
