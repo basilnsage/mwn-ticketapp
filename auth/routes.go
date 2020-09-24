@@ -5,12 +5,29 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
 )
 
-func userFromPayload(ctx *gin.Context) (*user, int, string, error) {
+func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
+	data, err := ctx.GetRawData()
+	if err != nil {
+		return nil, http.StatusBadRequest, "please provide a username and password", err
+	}
+	userProto := &protos.SignIn{}
+	if err = proto.Unmarshal(data, userProto); err != nil {
+		return nil, http.StatusBadRequest, "unable to parse provided credentials", err
+	}
+	userObj, err := users.NewUser(userProto.Username, userProto.Password)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "unable to create the user object", err
+	}
+	return userObj, http.StatusOK, "credentials parsed", nil
+}
+
+func userFromPayloadOld(ctx *gin.Context) (*user, int, string, error) {
 	data, err := ctx.GetRawData()
 	if err != nil {
 		return nil, http.StatusBadRequest, "please provide a username and password", err
@@ -20,11 +37,14 @@ func userFromPayload(ctx *gin.Context) (*user, int, string, error) {
 		return nil, http.StatusBadRequest, "unable to parse provided credentials", err
 	}
 	userObj := newUser(userProto.Username, userProto.Password)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "unable to create the user object", err
+	}
 	return userObj, http.StatusOK, "credentials parsed", nil
 }
 
 func signin(ctx *gin.Context) error {
-	newUser, statusCode, status, err := userFromPayload(ctx)
+	newUser, statusCode, status, err := userFromPayloadOld(ctx)
 	if err != nil {
 		cError := NewBaseError(statusCode, status)
 		_ = ctx.Error(err).SetType(1 << 1).SetMeta(*cError)
@@ -67,52 +87,6 @@ func signin(ctx *gin.Context) error {
 	return nil
 }
 
-func signupUser(c *gin.Context) error {
-	// parse raw binary data from request
-	// this should be a protobuf message
-	newUser, statusCode, status, err := userFromPayload(c)
-	if err != nil {
-		cError := NewBaseError(statusCode, status)
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	}
-	// validate the user struct
-	if err = newUser.validate(nil); err != nil {
-		cError := NewBaseError(http.StatusBadRequest, "failed to validate signup data")
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	}
-	// check for existng user
-	userExists, err := newUser.exists(GetClient())
-	if err != nil {
-		cError := NewBaseError(http.StatusInternalServerError, "signup failed")
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	}
-	if userExists {
-		err = errors.New("user already exists")
-		cError := NewBaseError(http.StatusBadRequest, "signup failed")
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	}
-	// no errors fetching user and user does not exist --> lets make that user
-	if res, err := newUser.write(GetClient()); err != nil {
-		cError := NewBaseError(http.StatusBadRequest, "signup failed")
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	} else {
-		log.Printf("user created with _id: %v", res.InsertedID)
-	}
-	if jwt, err := newUser.jwt(); err != nil {
-		cError := NewBaseError(http.StatusBadRequest, "signup failed")
-		_ = c.Error(err).SetType(1 << 1).SetMeta(*cError)
-		return err
-	} else {
-		c.SetCookie("auth-jwt", jwt, 3600, "", "", false, true)
-	}
-	return nil
-}
-
 func UseUserRoutes(r *gin.Engine, conf config) {
 	// init user validator
 	if err := initValidator(); err != nil {
@@ -138,7 +112,7 @@ func UseUserRoutes(r *gin.Engine, conf config) {
 			ctx.Status(http.StatusOK)
 		})
 		users.POST("/signup", func(ctx *gin.Context) {
-			if err := signupUser(ctx); err != nil {
+			if err := signupUser(ctx, conf); err != nil {
 				log.Printf("user signup failed: %v", err)
 			} else {
 				ctx.String(http.StatusCreated, "signup complete")
