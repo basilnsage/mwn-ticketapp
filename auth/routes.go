@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
@@ -111,12 +113,10 @@ func UseUserRoutes(r *gin.Engine, conf config) {
 			ctx.SetCookie("auth-jwt", "", -1, "", "", false, true)
 			ctx.Status(http.StatusOK)
 		})
-		users.POST("/signup", func(ctx *gin.Context) {
-			if err := signupUser(ctx, conf); err != nil {
-				log.Printf("user signup failed: %v", err)
-			} else {
-				ctx.String(http.StatusCreated, "signup complete")
-			}
+		users.POST("/signup", func(ginCtx *gin.Context) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			SignupUser(ctx, ginCtx, conf.collection, conf.authValidator)
 		})
 	}
 }

@@ -3,10 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/errors"
-	"github.com/basilnsage/mwn-ticketapp/auth/jwt"
+	"github.com/basilnsage/mwn-ticketapp/auth/token"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,11 @@ var (
 	authCollection = "users"
 )
 
+type config struct {
+	collection userColl
+	authValidator *token.JWTValidator
+}
+
 func main() {
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
@@ -27,33 +33,38 @@ func main() {
 		AllowHeaders:  []string{"Origin", "Content-Type"},
 		MaxAge:        12 * time.Hour,
 	}))
-	// use generic error-handling middleware
-	router.Use(errors.HandleErrors())
-	UseUserRoutes(router)
 
-	// init mongo cluster connection
-	err := InitMongo()
-	if err != nil {
-		log.Fatal(err.Error())
+	if err := InitMongo(); err != nil {
+		log.Fatalf("unable to create MongoDB connection: %v", err)
 	}
-	log.Print("mongo client initialized")
+	userCollection := GetCollection(GetDatabase(GetClient(), authDB), authCollection)
 	defer func() {
 		if err := CloseClient(); err != nil {
 			panic(err)
 		}
 	}()
 
-	// init signer
-	if err := initSigner(); err != nil {
-		log.Fatal(err.Error())
+	// init JWT validator struct
+	hmacKey, ok := os.LookupEnv("JWT_SIGN_KEY")
+	if !ok {
+		log.Fatalf("please set the JWT_SIGN_KEY environment variable")
 	}
-	if err := jwt.InitSigner(); err != nil {
-		log.Fatal(err.Error())
+	jwtValidtor, err := token.NewJWTValidator([]byte(hmacKey), "HS256")
+	if err != nil {
+		log.Fatalf("unable to init JWT Validator: %v", err)
 	}
-	jwt.Sign()
+
+	// bundle the mongo DB collection and jwt parser together
+	conf := config{userColl{userCollection}, jwtValidtor}
+
+	// use generic error-handling middleware
+	router.Use(errors.HandleErrors())
+	UseUserRoutes(router, conf)
+
+	// init mongo cluster connection
 
 	if err := router.Run(":4000"); err != nil {
-		log.Printf("unable to run auth service")
+		log.Fatalf("unable to run auth service: %v", err)
 	} else {
 		log.Print("gin server running and waiting for requests")
 	}

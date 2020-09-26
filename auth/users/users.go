@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/go-playground/validator"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"strings"
-	"time"
-
-	"github.com/go-playground/validator"
 )
 
 var v = validator.New()
@@ -29,11 +27,11 @@ func init() {
 
 type Claims struct {
 	Email string      `json:"email"`
-	UID   string `json:"uid"`
+	ID   string `json:"id"`
 }
 
 func (pc Claims) Valid() error {
-	if pc.Email == "" || pc.UID == "" {
+	if pc.Email == "" || pc.ID == "" {
 		return errors.New("claims do not represent a user")
 	}
 	return nil
@@ -42,25 +40,29 @@ func (pc Claims) Valid() error {
 type User struct {
 	Email    string `validate:"required,email,strnonblank"`
 	Password string `validate:"required,passwd,strnonblank"`
-	Hash []byte
+	//Hash []byte
 	uid      interface{}
 }
 
 func NewUser(email string, password string) (*User, error) {
-	hash, err := hashPass(password)
-	if err != nil {
-		return nil, err
-	}
 	return &User{
 		email,
 		password,
-		hash,
+		//hash,
 		nil,
 	}, nil
 }
 
 func hashPass(pass string) ([]byte, error) {
 	return bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+}
+
+func (u User) Hash() ([]byte, error) {
+	hash, err := hashPass(u.Password)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
 }
 
 func (u User) Validate(exempt map[string]interface{}) error {
@@ -81,9 +83,7 @@ func (u User) Validate(exempt map[string]interface{}) error {
 	return nil
 }
 
-func (u User) Exists(crud CRUD) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func (u User) Exists(ctx context.Context, crud CRUD) (bool, error) {
 	users, err := crud.Read(ctx, u)
 	if err != nil {
 		return true, fmt.Errorf("unable to Read user from storage: %v", err)
@@ -97,9 +97,7 @@ func (u User) Exists(crud CRUD) (bool, error) {
 	}
 }
 
-func (u User) Write(crud CRUD) (interface{}, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func (u User) Write(ctx context.Context, crud CRUD) (interface{}, error) {
 	uid, err := crud.Write(ctx, u)
 	if err != nil {
 		return nil, fmt.Errorf("could not persist user: %v", err)

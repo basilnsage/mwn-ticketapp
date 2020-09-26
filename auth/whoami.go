@@ -37,5 +37,5 @@ func userFromRequest(ctx *gin.Context, validator *token.JWTValidator) (*gin.H, e
 	if err != nil {
 		return nil, err
 	}
-	return &gin.H{"email": parsedClaims.Email, "uid": parsedClaims.UID}, nil
+	return &gin.H{"email": parsedClaims.Email, "id": parsedClaims.ID}, nil
 }

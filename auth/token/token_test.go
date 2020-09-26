@@ -72,6 +72,29 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseWithClaims(t *testing.T) {
+	v, err := NewJWTValidator(key, "HS256")
+	if err != nil {
+		t.Fatalf("NewJWTValidator() error not nil: %v", err)
+	}
+
+	parsedClaims := jwt.MapClaims{}
+	token, err := v.ParseWithClaims(fmt.Sprintf("%s.%s.%s", header, payload, sig), parsedClaims)
+	if err != nil {
+		t.Fatalf("JWTValidator.Parse() error not nil: %v", err)
+	}
+
+	if !token.Valid {
+		t.Error("JWTValidator.Parse() parsed token invalid")
+	}
+	if diff := cmp.Diff(token.Header, headerMap); diff != "" {
+		t.Errorf("JWTValidator.Parse() Header mismatch (-want, +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(parsedClaims, claims); diff != "" {
+		t.Errorf("JWTValidator.Parse() Claims mismatch (-want, +got):\n%s", diff)
+	}
+}
+
 func TestSign(t *testing.T) {
 	v, err := NewJWTValidator(key, "HS256")
 	if err != nil {

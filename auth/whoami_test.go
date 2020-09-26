@@ -14,25 +14,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var (
-	key = []byte("password")
-	// { alg: HS256, typ: JWT }
-	header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-	// { email: foo@example.com, uid: 5f47ec2c86ed3ef991cdfd94 }
-	payload = "eyJlbWFpbCI6ImZvb0BleGFtcGxlLmNvbSIsInVpZCI6IjVmNDdlYzJjODZlZDNlZjk5MWNkZmQ5NCJ9"
-	// HS256 signature with key "password"
-	sig = "jrgWQhw5YFXm01UVbZ-ZWEpJgmM_iNXwwgPG4pJ6bcQ"
-	sampleClaims = users.Claims{
-		Email: "foo@example.com",
-		UID: "5f47ec2c86ed3ef991cdfd94",
-	}
-	jwtString = fmt.Sprintf("%s.%s.%s", header, payload, sig)
-	cookie = http.Cookie{
-		Name:  "auth-jwt",
-		Value: jwtString,
-	}
-)
-
 func setup(t *testing.T) (*token.JWTValidator, *gin.Engine) {
 	// create the JWT validator
 	jwtValidator, err:= token.NewJWTValidator(key, "HS256")
