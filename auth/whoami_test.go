@@ -16,13 +16,13 @@ import (
 
 func setup(t *testing.T) (*token.JWTValidator, *gin.Engine) {
 	// create the JWT validator
-	jwtValidator, err:= token.NewJWTValidator(key, "HS256")
+	jwtValidator, err := token.NewJWTValidator(key, "HS256")
 	if err != nil {
 		t.Fatalf("token.NewJWTValidator: %v", err)
 	}
 
 	eng := gin.Default()
-	eng.Use(func (ctx *gin.Context) {
+	eng.Use(func(ctx *gin.Context) {
 		ctx.Next()
 		if len(ctx.Errors) > 0 {
 			t.Errorf("ctx error: %v", ctx.Errors[0])

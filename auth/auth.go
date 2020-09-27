@@ -20,7 +20,7 @@ var (
 )
 
 type config struct {
-	collection userColl
+	collection    userColl
 	authValidator *token.JWTValidator
 }
 

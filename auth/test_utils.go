@@ -13,22 +13,24 @@ var (
 	key = []byte("password")
 	// { alg: HS256, typ: JWT }
 	header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-	// { email: foo@example.com, uid: 5f47ec2c86ed3ef991cdfd94 }
-	payload = "eyJlbWFpbCI6ImZvb0BleGFtcGxlLmNvbSIsInVpZCI6IjVmNDdlYzJjODZlZDNlZjk5MWNkZmQ5NCJ9"
+	// { email: foo@example.com, id: 5f47ec2c86ed3ef991cdfd94 }
+	payload = "eyJlbWFpbCI6ImZvb0BleGFtcGxlLmNvbSIsImlkIjoiNWY0N2VjMmM4NmVkM2VmOTkxY2RmZDk0In0"
 	// HS256 signature with key "password"
-	sig = "jrgWQhw5YFXm01UVbZ-ZWEpJgmM_iNXwwgPG4pJ6bcQ"
-	email = "foo@example.com"
-	uid = "5f47ec2c86ed3ef991cdfd94"
+	sig       = "jQ4rq4Ih6SL2J6jx7yhQDj54PptcwBv1w38zvsbIygs"
+	email     = "foo@example.com"
+	pass      = "password"
+	passHash  = []byte("$2a$10$XoknOf54X3cPka131Ga55.oN/YcnuJ8CfOWof5ZCTKIhmz7.95xn2")
+	uid       = "5f47ec2c86ed3ef991cdfd94"
 	claimsMap = map[string]interface{}{
 		"email": email,
-		"id": uid,
+		"id":    uid,
 	}
 	sampleClaims = users.Claims{
 		Email: email,
-		ID: uid,
+		ID:    uid,
 	}
 	jwtString = fmt.Sprintf("%s.%s.%s", header, payload, sig)
-	cookie = http.Cookie{
+	cookie    = http.Cookie{
 		Name:  "auth-jwt",
 		Value: jwtString,
 	}
@@ -57,3 +59,6 @@ func (m *mockCRUD) Write(ctx context.Context, user users.User) (interface{}, err
 	return args.Get(0).(interface{}), args.Error(1)
 }
 
+func checkTestUser(u users.User) bool {
+	return u.Email == email
+}

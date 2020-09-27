@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"time"
@@ -21,7 +22,12 @@ func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
 	if err = proto.Unmarshal(data, userProto); err != nil {
 		return nil, http.StatusBadRequest, "unable to parse provided credentials", err
 	}
-	userObj, err := users.NewUser(userProto.Username, userProto.Password)
+	userEmail, userPass := userProto.Username, userProto.Password
+	userHash, err := bcrypt.GenerateFromPassword([]byte(userPass), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "unable to hash password", err
+	}
+	userObj, err := users.NewUser(userEmail, userPass, userHash)
 	if err != nil {
 		return nil, http.StatusInternalServerError, "unable to create the user object", err
 	}
@@ -33,25 +39,25 @@ func UseUserRoutes(r *gin.Engine, conf config) {
 	if err := initValidator(); err != nil {
 		log.Fatalf("UseUserRoutes.initValidtor: %v", err)
 	}
-	users := r.Group("/api/users")
+	userRoutePrefix := r.Group("/api/users")
 	// TODO: break out payload validation into middleware?
 	// keep following along with class first and see what they do about /signout and /signup
 	// how they implement these routes will affect how to organize/apply the middlewear
 	{
-		users.GET("/whoami", func(ctx *gin.Context) {
+		userRoutePrefix.GET("/whoami", func(ctx *gin.Context) {
 			Whoami(ctx, conf.authValidator)
 		})
-		users.POST("/signup", func(ginCtx *gin.Context) {
+		userRoutePrefix.POST("/signup", func(ginCtx *gin.Context) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			SignupUser(ctx, ginCtx, conf.collection, conf.authValidator)
 		})
-		users.POST("/signin", func(ginCtx *gin.Context) {
+		userRoutePrefix.POST("/signin", func(ginCtx *gin.Context) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			Signin(ctx, ginCtx, conf.collection, conf.authValidator)
 		})
-		users.GET("/signout", func(ctx *gin.Context) {
+		userRoutePrefix.GET("/signout", func(ctx *gin.Context) {
 			ctx.SetCookie("auth-jwt", "", -1, "", "", false, true)
 			ctx.Status(http.StatusOK)
 		})

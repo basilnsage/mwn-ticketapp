@@ -25,11 +25,6 @@ func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, s
 		return err, NewBaseError(statusCode, status)
 	}
 
-	// validate the user struct
-	if err = newUser.Validate(nil); err != nil {
-		return err, NewBaseError(http.StatusBadRequest, "signup failed")
-	}
-
 	// check for existng user
 	userExists, err := newUser.Exists(ctx, crud)
 	if err != nil {
@@ -47,10 +42,11 @@ func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, s
 	}
 
 	// now create a JWT for the user and return this to the client
-	if jwt, err := newUser.CreateSessionToken(signer); err != nil {
+	userJwt, err := newUser.CreateSessionToken(signer)
+	if err != nil {
 		return err, NewBaseError(http.StatusBadRequest, "signup failed")
-	} else {
-		ginCtx.SetCookie("auth-jwt", jwt, 3600, "", "", false, true)
 	}
+	ginCtx.SetCookie("auth-jwt", userJwt, 3600, "", "", false, true)
+
 	return nil, nil
 }

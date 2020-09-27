@@ -19,13 +19,11 @@ func Signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer us
 }
 
 func signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) error {
-	newUser, _, _,  err := userFromPayload(ginCtx)
+	newUser, _, _, err := userFromPayload(ginCtx)
 	if err != nil {
 		return fmt.Errorf("unable to parse user from payload: %v", err)
 	}
-	if err := newUser.Validate(map[string]interface{}{"passwd": nil}); err != nil {
-		return err
-	}
+
 	exists, err := newUser.Exists(ctx, crud)
 	if err != nil {
 		return err
@@ -38,10 +36,12 @@ func signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer us
 	} else if !passwordOk {
 		return errors.New("user password does not match")
 	}
+
 	userJWT, err := newUser.CreateSessionToken(signer)
 	if err != nil {
 		return err
 	}
 	ginCtx.SetCookie("auth-jwt", userJWT, 3600, "", "", false, true)
+
 	return nil
 }

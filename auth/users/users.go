@@ -7,7 +7,7 @@ import (
 	"github.com/go-playground/validator"
 	"golang.org/x/crypto/bcrypt"
 	"log"
-	"strings"
+	//"strings"
 )
 
 var v = validator.New()
@@ -96,9 +96,9 @@ func NewUser(email string, password string, hash []byte) (*User, error) {
 	//}, nil
 //}
 
-func hashPass(pass string) ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
-}
+//func hashPass(pass string) ([]byte, error) {
+//	return bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+//}
 
 //func (u User) Hash() ([]byte, error) {
 //	hash, err := hashPass(u.Password)
@@ -108,23 +108,23 @@ func hashPass(pass string) ([]byte, error) {
 //	return hash, nil
 //}
 
-func (u User) Validate(exempt map[string]interface{}) error {
-	err := v.Struct(u)
-	if err != nil {
-		invalidTags := make([]string, 0)
-		for _, err := range err.(validator.ValidationErrors) {
-			tag := err.Tag()
-			if _, ok := exempt[tag]; !ok {
-				invalidTags = append(invalidTags, err.Tag())
-			}
-		}
-		if len(invalidTags) > 0 {
-			invalidFieldString := fmt.Sprintf("unable to validate these tags: %v", strings.Join(invalidTags, ","))
-			return errors.New(invalidFieldString)
-		}
-	}
-	return nil
-}
+//func (u User) Validate(exempt map[string]interface{}) error {
+//	err := v.Struct(u)
+//	if err != nil {
+//		invalidTags := make([]string, 0)
+//		for _, err := range err.(validator.ValidationErrors) {
+//			tag := err.Tag()
+//			if _, ok := exempt[tag]; !ok {
+//				invalidTags = append(invalidTags, err.Tag())
+//			}
+//		}
+//		if len(invalidTags) > 0 {
+//			invalidFieldString := fmt.Sprintf("unable to validate these tags: %v", strings.Join(invalidTags, ","))
+//			return errors.New(invalidFieldString)
+//		}
+//	}
+//	return nil
+//}
 
 func (u *User) SetUID(uid interface{}){
 	u.uid = uid
@@ -152,8 +152,6 @@ func (u *User) Write(ctx context.Context, crud CRUD) (interface{}, error) {
 
 func (u User) DoesPassMatch(ctx context.Context, crud CRUD) (bool, error) {
 	foundUsers, err := crud.Read(ctx, u)
-	fmt.Println("users: ", foundUsers)
-	fmt.Println("user email: ", foundUsers[0].Email)
 	switch {
 	case err != nil:
 		return false, fmt.Errorf("unable to fetch users from DB: %v", err)
@@ -162,7 +160,7 @@ func (u User) DoesPassMatch(ctx context.Context, crud CRUD) (bool, error) {
 	case len(foundUsers) == 0:
 		return false, fmt.Errorf("no users expected! only one user expected")
 	}
-	if err = bcrypt.CompareHashAndPassword([]byte(foundUsers[0].Password), []byte(u.Password)); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(foundUsers[0].Hash), []byte(u.password)); err != nil {
 		return false, fmt.Errorf("bcrypt.CompareHashAndPassword: %v", err)
 	}
 	return true, nil

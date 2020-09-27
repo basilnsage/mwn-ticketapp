@@ -62,16 +62,11 @@ func (uc userColl) Read(ctx context.Context, user users.User) ([]users.User, err
 	if err = cursor.All(ctx, &foundUsers); err != nil {
 		return nil, fmt.Errorf("mongo.Cursor.All: %v", err)
 	}
-	fmt.Println("found users: ", foundUsers)
 	return foundUsers, nil
 }
 
 func (uc userColl) Write(ctx context.Context, user users.User) (interface{}, error) {
-	userHash, err := user.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("user.Hash: %v", err)
-	}
-	res, err := uc.c.InsertOne(ctx, bson.M{"email": user.Email, "password": userHash})
+	res, err := uc.c.InsertOne(ctx, bson.M{"email": user.Email, "hash": user.Hash})
 	if err != nil {
 		return nil, fmt.Errorf("mongo.Collection.InsertOne: %v", err)
 	}

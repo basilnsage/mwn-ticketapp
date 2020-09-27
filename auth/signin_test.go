@@ -6,18 +6,18 @@ import (
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"github.com/golang/protobuf/proto"
 )
-
 
 func TestSignin(t *testing.T) {
 	signer := new(mockSigner)
 	crud := new(mockCRUD)
 	ctx := context.Background()
-	user, err := users.NewUser(email, "password")
+	user, err := users.NewUser(email, pass, passHash)
 	if err != nil {
 		t.Fatalf("unable to create new user: %v", err)
 	}
@@ -29,16 +29,17 @@ func TestSignin(t *testing.T) {
 		t.Fatalf("unable to marshal user proto: %v", err)
 	}
 
-	crud.On("Read", ctx, *user).Return([]users.User{*user}, nil)
-	crud.On("Write", ctx, *user).Return(uid, nil)
+	//crud.On("Read", ctx, *user).Return([]users.User{*user}, nil)
+	crud.On("Read", ctx, mock.MatchedBy(checkTestUser)).Return([]users.User{*user}, nil)
+	crud.On("Write", ctx, mock.MatchedBy(checkTestUser)).Return(uid, nil)
 	signer.On("Sign", map[string]interface{}{
 		"email": email,
-		"id": uid,
+		"id":    nil,
 	}).Return(jwtString, nil)
 
 	gin.SetMode(gin.TestMode)
 	eng := gin.Default()
-	eng.Use(func (ctx *gin.Context) {
+	eng.Use(func(ctx *gin.Context) {
 		ctx.Next()
 		if len(ctx.Errors) > 0 {
 			t.Errorf("ctx error: %v", ctx.Errors[0])
@@ -47,7 +48,6 @@ func TestSignin(t *testing.T) {
 	eng.POST("/test", func(ginCtx *gin.Context) {
 		Signin(ctx, ginCtx, crud, signer)
 	})
-
 
 	w := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(userBytes))
@@ -69,11 +69,10 @@ func TestSignin(t *testing.T) {
 			} else {
 				break
 			}
+		}
+		if !cookieFound {
+			t.Error("auth-jwt cookie not set")
+		}
 	}
-	if !cookieFound {
-		t.Error("auth-jwt cookie not set")
-	}
-}
-
 
 }
