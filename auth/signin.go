@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
+	e "github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 func Signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) {
 	if err := signin(ctx, ginCtx, crud, signer); err != nil {
-		cError := NewBaseError(http.StatusBadRequest, "invalid credentials")
+		cError := e.NewBaseError(http.StatusBadRequest, "invalid credentials")
 		_ = ginCtx.Error(err).SetType(1 << 1).SetMeta(*cError)
 	} else {
 		ginCtx.Status(http.StatusOK)

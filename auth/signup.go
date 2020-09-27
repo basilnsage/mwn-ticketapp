@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/basilnsage/mwn-ticketapp/auth/users"
-	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+
+	e "github.com/basilnsage/mwn-ticketapp/auth/errors"
+	"github.com/basilnsage/mwn-ticketapp/auth/users"
+	"github.com/gin-gonic/gin"
 )
 
 func SignupUser(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) {
@@ -17,26 +19,26 @@ func SignupUser(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signe
 	}
 }
 
-func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) (error, *BaseError) {
+func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) (error, *e.BaseError) {
 	// parse raw binary data from request
 	// this should be a protobuf message
 	newUser, statusCode, status, err := userFromPayload(ginCtx)
 	if err != nil {
-		return err, NewBaseError(statusCode, status)
+		return err, e.NewBaseError(statusCode, status)
 	}
 
 	// check for existng user
 	userExists, err := newUser.Exists(ctx, crud)
 	if err != nil {
-		return err, NewBaseError(http.StatusInternalServerError, "signup failed")
+		return err, e.NewBaseError(http.StatusInternalServerError, "signup failed")
 	}
 	if userExists {
-		return errors.New("user already exists"), NewBaseError(http.StatusBadRequest, "signup failed")
+		return errors.New("user already exists"), e.NewBaseError(http.StatusBadRequest, "signup failed")
 	}
 
 	// no errors fetching user and user does not exist --> lets make that user
 	if uid, err := newUser.Write(ctx, crud); err != nil {
-		return err, NewBaseError(http.StatusBadRequest, "signup failed")
+		return err, e.NewBaseError(http.StatusBadRequest, "signup failed")
 	} else {
 		log.Printf("user created with id: %v", uid)
 	}
@@ -44,7 +46,7 @@ func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, s
 	// now create a JWT for the user and return this to the client
 	userJwt, err := newUser.CreateSessionToken(signer)
 	if err != nil {
-		return err, NewBaseError(http.StatusBadRequest, "signup failed")
+		return err, e.NewBaseError(http.StatusBadRequest, "signup failed")
 	}
 	ginCtx.SetCookie("auth-jwt", userJwt, 3600, "", "", false, true)
 

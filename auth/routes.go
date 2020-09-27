@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"golang.org/x/crypto/bcrypt"
-	"log"
 	"net/http"
 	"time"
 
@@ -11,6 +9,7 @@ import (
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
@@ -35,10 +34,6 @@ func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
 }
 
 func UseUserRoutes(r *gin.Engine, conf config) {
-	// init user validator
-	if err := initValidator(); err != nil {
-		log.Fatalf("UseUserRoutes.initValidtor: %v", err)
-	}
 	userRoutePrefix := r.Group("/api/users")
 	// TODO: break out payload validation into middleware?
 	// keep following along with class first and see what they do about /signout and /signup
