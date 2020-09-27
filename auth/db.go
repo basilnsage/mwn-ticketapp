@@ -54,14 +54,15 @@ func GetCollection(db *mongo.Database, coll string) *mongo.Collection {
 
 func (uc userColl) Read(ctx context.Context, user users.User) ([]users.User, error) {
 	var foundUsers []users.User
-	cursor, err := uc.c.Find(ctx, bson.M{"username": user.Email})
+	cursor, err := uc.c.Find(ctx, bson.M{"email": user.Email})
 	if err != nil {
 		return nil, fmt.Errorf("mongo.Collection.Find: %v", err)
 	}
 
-	if err = cursor.All(ctx, foundUsers); err != nil {
+	if err = cursor.All(ctx, &foundUsers); err != nil {
 		return nil, fmt.Errorf("mongo.Cursor.All: %v", err)
 	}
+	fmt.Println("found users: ", foundUsers)
 	return foundUsers, nil
 }
 
@@ -70,7 +71,7 @@ func (uc userColl) Write(ctx context.Context, user users.User) (interface{}, err
 	if err != nil {
 		return nil, fmt.Errorf("user.Hash: %v", err)
 	}
-	res, err := uc.c.InsertOne(ctx, bson.M{"username": user.Email, "password": userHash})
+	res, err := uc.c.InsertOne(ctx, bson.M{"email": user.Email, "password": userHash})
 	if err != nil {
 		return nil, fmt.Errorf("mongo.Collection.InsertOne: %v", err)
 	}

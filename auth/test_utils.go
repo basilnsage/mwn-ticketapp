@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/stretchr/testify/mock"
 	"net/http"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
@@ -31,3 +33,27 @@ var (
 		Value: jwtString,
 	}
 )
+
+type mockSigner struct {
+	mock.Mock
+}
+
+type mockCRUD struct {
+	mock.Mock
+}
+
+func (m *mockSigner) Sign(claims map[string]interface{}) (string, error) {
+	args := m.Called(claims)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockCRUD) Read(ctx context.Context, user users.User) ([]users.User, error) {
+	args := m.Called(ctx, user)
+	return args.Get(0).([]users.User), args.Error(1)
+}
+
+func (m *mockCRUD) Write(ctx context.Context, user users.User) (interface{}, error) {
+	args := m.Called(ctx, user)
+	return args.Get(0).(interface{}), args.Error(1)
+}
+

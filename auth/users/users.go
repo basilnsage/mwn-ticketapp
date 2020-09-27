@@ -39,31 +39,74 @@ func (pc Claims) Valid() error {
 
 type User struct {
 	Email    string `validate:"required,email,strnonblank"`
-	Password string `validate:"required,passwd,strnonblank"`
-	//Hash []byte
+	Hash []byte
+	// pulling user from mongo populates this field with the pass's bcrypt hash
+	// when the user is created, populated with the plaintext password --> bad n sad
+	// TODO: figure this out
+	// unexport Password field
+	// build validation into NewUser func
+	// NewUser(email, password, hash)... perform check on password/hash to make sure they equate
+	password string `validate:"required,passwd,strnonblank"`
+	// issues with reintroducing Hash
+	// how to mock? new hash generated every time the password is run through bcrypt
 	uid      interface{}
 }
 
-func NewUser(email string, password string) (*User, error) {
+func validatePassword(password string) error {
+	switch {
+	case len(password) < 8:
+		return errors.New("password is too short")
+	}
+	return nil
+}
+
+func NewUser(email string, password string, hash []byte) (*User, error) {
+	// validate email
+	type Email struct {
+		Value string `validate:"required,email,strnonblank"`
+	}
+	if err := v.Struct(Email{email}); err != nil {
+		return nil, fmt.Errorf("invalid email: %v", err)
+	}
+
+	// validate password
+	if err := validatePassword(password); err != nil {
+		return nil, fmt.Errorf("invalid password: %v", err)
+	}
+
+	// check that password and hash match
+	if err := bcrypt.CompareHashAndPassword(hash, []byte(password)); err != nil {
+		return nil, fmt.Errorf("password and hash do not match: %v", err)
+	}
+
 	return &User{
-		email,
-		password,
-		//hash,
-		nil,
+		Email: email,
+		Hash: hash,
+		password: password,
+		uid: nil,
 	}, nil
 }
+
+//func NewUser(email string, password string) (*User, error) {
+//	return &User{
+//		email,
+//		password,
+//		hash,
+		//nil,
+	//}, nil
+//}
 
 func hashPass(pass string) ([]byte, error) {
 	return bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
 }
 
-func (u User) Hash() ([]byte, error) {
-	hash, err := hashPass(u.Password)
-	if err != nil {
-		return nil, err
-	}
-	return hash, nil
-}
+//func (u User) Hash() ([]byte, error) {
+//	hash, err := hashPass(u.Password)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return hash, nil
+//}
 
 func (u User) Validate(exempt map[string]interface{}) error {
 	err := v.Struct(u)
@@ -83,27 +126,46 @@ func (u User) Validate(exempt map[string]interface{}) error {
 	return nil
 }
 
+func (u *User) SetUID(uid interface{}){
+	u.uid = uid
+}
+
 func (u User) Exists(ctx context.Context, crud CRUD) (bool, error) {
 	users, err := crud.Read(ctx, u)
 	if err != nil {
-		return true, fmt.Errorf("unable to Read user from storage: %v", err)
-	} else if len(users) > 1 {
-		return true, fmt.Errorf("more than 1 user found: %v", len(users))
-	}
-	if len(users) == 0 {
+		return true, fmt.Errorf("unable to fetch users from DB: %v", err)
+	} else if len(users) == 0 {
 		return false, nil
 	} else {
 		return true, nil
 	}
 }
 
-func (u User) Write(ctx context.Context, crud CRUD) (interface{}, error) {
-	uid, err := crud.Write(ctx, u)
+func (u *User) Write(ctx context.Context, crud CRUD) (interface{}, error) {
+	uid, err := crud.Write(ctx, *u)
 	if err != nil {
 		return nil, fmt.Errorf("could not persist user: %v", err)
 	}
-	u.uid = uid
+	u.SetUID(uid)
 	return uid, nil
+}
+
+func (u User) DoesPassMatch(ctx context.Context, crud CRUD) (bool, error) {
+	foundUsers, err := crud.Read(ctx, u)
+	fmt.Println("users: ", foundUsers)
+	fmt.Println("user email: ", foundUsers[0].Email)
+	switch {
+	case err != nil:
+		return false, fmt.Errorf("unable to fetch users from DB: %v", err)
+	case len(foundUsers) > 1:
+		return false, fmt.Errorf("too many users found! only one user expected")
+	case len(foundUsers) == 0:
+		return false, fmt.Errorf("no users expected! only one user expected")
+	}
+	if err = bcrypt.CompareHashAndPassword([]byte(foundUsers[0].Password), []byte(u.Password)); err != nil {
+		return false, fmt.Errorf("bcrypt.CompareHashAndPassword: %v", err)
+	}
+	return true, nil
 }
 
 func (u User) CreateSessionToken(signer Signer) (string, error) {

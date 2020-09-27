@@ -3,18 +3,17 @@ package main
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
 	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 	"github.com/golang/protobuf/proto"
 )
 
-func TestSignupFlow(t *testing.T) {
+
+func TestSignin(t *testing.T) {
 	signer := new(mockSigner)
 	crud := new(mockCRUD)
 	ctx := context.Background()
@@ -30,7 +29,7 @@ func TestSignupFlow(t *testing.T) {
 		t.Fatalf("unable to marshal user proto: %v", err)
 	}
 
-	crud.On("Read", ctx, *user).Return(make([]users.User, 0), nil)
+	crud.On("Read", ctx, *user).Return([]users.User{*user}, nil)
 	crud.On("Write", ctx, *user).Return(uid, nil)
 	signer.On("Sign", map[string]interface{}{
 		"email": email,
@@ -46,7 +45,7 @@ func TestSignupFlow(t *testing.T) {
 		}
 	})
 	eng.POST("/test", func(ginCtx *gin.Context) {
-		SignupUser(ctx, ginCtx, crud, signer)
+		Signin(ctx, ginCtx, crud, signer)
 	})
 
 
@@ -58,13 +57,23 @@ func TestSignupFlow(t *testing.T) {
 	eng.ServeHTTP(w, req)
 
 	resp := w.Result()
-	if got, want := resp.StatusCode, http.StatusCreated; got != want {
+	if got, want := resp.StatusCode, http.StatusOK; got != want {
 		t.Errorf("wrong response code: %v, want: %v", got, want)
 	}
-	respString, _ := ioutil.ReadAll(resp.Body)
-	if got, want := string(respString), "signup complete"; got != want {
-		t.Errorf("wrong response status: %v, want: %v", got, want)
+	cookieFound := false
+	for _, cookie := range resp.Cookies() {
+		if name := cookie.Name; name == "auth-jwt" {
+			cookieFound = true
+			if got, want := cookie.Value, jwtString; got != want {
+				t.Errorf("wrong auth-jwt cookie: %v, want: %v", got, want)
+			} else {
+				break
+			}
+	}
+	if !cookieFound {
+		t.Error("auth-jwt cookie not set")
 	}
 }
 
 
+}
