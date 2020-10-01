@@ -1,3 +1,5 @@
 .idea/
 auth/auth
 *.proto
+node_modules/
+.next/
