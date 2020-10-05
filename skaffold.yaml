@@ -3,12 +3,18 @@ kind: Config
 deploy:
   kubectl:
     manifests:
-      - ./infra/k8s/*
+      - ./infra/k8s/client-depl.yaml
 build:
   local:
     push: false
   artifacts:
-    - image: basilnsage/tickets.auth
-      context: auth
+    - image: basilnsage/mwn-ticketapp.client
+      context: client
       docker:
         dockerfile: Dockerfile
+      sync:
+        manual:
+          - src: '**/*.js'
+            dest: .
+          - src: '**/*.proto'
+            dest: .

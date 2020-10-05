@@ -22,7 +22,8 @@ func SignupUser(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signe
 func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) (error, *e.BaseError) {
 	// parse raw binary data from request
 	// this should be a protobuf message
-	newUser, statusCode, status, err := userFromPayload(ginCtx)
+	//newUser, statusCode, status, err := userFromPayload(ginCtx)
+	newUser, statusCode, status, err := userFromForm(ginCtx)
 	if err != nil {
 		return err, e.NewBaseError(statusCode, status)
 	}

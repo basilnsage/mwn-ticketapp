@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,6 +12,29 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/crypto/bcrypt"
 )
+
+type userFormData struct {
+	Username string `json:"username" binding:required`
+	Password string `json:"password" binding:required`
+}
+
+func userFromForm(ctx *gin.Context) (*users.User, int, string, error) {
+	data := new(userFormData)
+	err := ctx.Bind(data)
+	if err != nil {
+		return nil, http.StatusBadRequest,
+		"please provide a username and password", fmt.Errorf("ctx.Bind: %v", err)
+	}
+	userHash, err := bcrypt.GenerateFromPassword([]byte(data.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "unable to hash password", err
+	}
+	userObj, err := users.NewUser(data.Username, data.Password, userHash)
+	if err != nil {
+		return nil, http.StatusBadRequest, "malformed request", err
+	}
+	return userObj, http.StatusOK, "credentials parsed", nil
+}
 
 func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
 	data, err := ctx.GetRawData()

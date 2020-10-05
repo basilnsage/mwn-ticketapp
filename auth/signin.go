@@ -21,7 +21,7 @@ func Signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer us
 }
 
 func signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer users.Signer) error {
-	newUser, _, _, err := userFromPayload(ginCtx)
+	newUser, _, _, err := userFromForm(ginCtx)
 	if err != nil {
 		return fmt.Errorf("unable to parse user from payload: %v", err)
 	}

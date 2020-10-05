@@ -25,17 +25,20 @@ func Whoami(ctx *gin.Context, validator *token.JWTValidator) {
 }
 
 func userFromRequest(ctx *gin.Context, validator *token.JWTValidator) (*gin.H, error) {
+	defaultResp := &gin.H{"email": nil, "id": nil}
 	// check for the "auth-jwt" cookie from the request
 	cookie, err := ctx.Cookie("auth-jwt")
-	if err != nil {
-		return nil, err
+	if err == http.ErrNoCookie {
+		return defaultResp, nil
+	} else if err != nil {
+		return defaultResp, err
 	}
 
 	parsedClaims := new(Claims)
 	// attempt to parse the cookie as a JWT
 	_, err = validator.ParseWithClaims(cookie, parsedClaims)
 	if err != nil {
-		return nil, err
+		return defaultResp, err
 	}
 	return &gin.H{"email": parsedClaims.Email, "id": parsedClaims.ID}, nil
 }

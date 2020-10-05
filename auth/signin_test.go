@@ -3,10 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
-	"github.com/basilnsage/mwn-ticketapp/common/protos"
 	"github.com/gin-gonic/gin"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
@@ -21,12 +20,16 @@ func TestSignin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create new user: %v", err)
 	}
-	userBytes, err := proto.Marshal(&protos.SignIn{
-		Username: "foo@example.com",
-		Password: "password",
-	})
+	//userBytes, err := proto.Marshal(&protos.SignIn{
+	//	Username: "foo@example.com",
+	//	Password: "password",
+	//})
+	//if err != nil {
+	//	t.Fatalf("unable to marshal user proto: %v", err)
+	//}
+	payload, err := json.Marshal(&userFormData{Username: email, Password: pass})
 	if err != nil {
-		t.Fatalf("unable to marshal user proto: %v", err)
+		t.Fatalf("json.marshal: %v", err)
 	}
 
 	//crud.On("Read", ctx, *user).Return([]users.User{*user}, nil)
@@ -50,10 +53,12 @@ func TestSignin(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(userBytes))
+	//req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(userBytes))
+	req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("http.NewRequest: %v", err)
 	}
+	req.Header.Add("Content-Type", "application/json")
 	eng.ServeHTTP(w, req)
 
 	resp := w.Result()

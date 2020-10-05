@@ -1,7 +1,7 @@
 FROM node:alpine
 
 WORKDIR /app
-RUN npm install
 COPY . .
+RUN npm install
 
 CMD ["npm", "run", "dev"]

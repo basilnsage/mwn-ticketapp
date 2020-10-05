@@ -27,11 +27,14 @@ func init() {
 
 type Claims struct {
 	Email string      `json:"email"`
+	// do we really need the ID in the claims? why would the user need to see this?
+	// if we do want to include the ID we should think about methods to create a new user
+	// by fetching a matching user from the DB; match done via email address
 	ID   string `json:"id"`
 }
 
 func (pc Claims) Valid() error {
-	if pc.Email == "" || pc.ID == "" {
+	if pc.Email == "" {
 		return errors.New("claims do not represent a user")
 	}
 	return nil
