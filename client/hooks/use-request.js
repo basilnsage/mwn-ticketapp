@@ -13,6 +13,7 @@ const named = ({url, method, body, onSuccess}) => {
             }
             return resp.data;
         } catch(err) {
+            console.log(err);
             setErrors(
                 <div className="alert alert-danger">
                 <h4>Ooops....</h4>
