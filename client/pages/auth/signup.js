@@ -49,4 +49,4 @@ const signupDefault = () => {
   );
 };
 
-export default signinDefault;
+export default signupDefault;
