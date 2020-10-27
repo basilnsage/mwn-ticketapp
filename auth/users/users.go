@@ -7,7 +7,6 @@ import (
 	"github.com/go-playground/validator"
 	"golang.org/x/crypto/bcrypt"
 	"log"
-	//"strings"
 )
 
 var v = validator.New()

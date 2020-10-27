@@ -2,19 +2,17 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"github.com/basilnsage/mwn-ticketapp/auth/token"
+	"github.com/basilnsage/prometheus-gin-metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	defaultStatus  = "unable to process request"
-	defaultCode    = http.StatusBadRequest
 	authDB         = "auth"
 	authCollection = "users"
 )
@@ -25,15 +23,7 @@ type config struct {
 }
 
 func main() {
-	router := gin.Default()
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:  []string{"http://localhost:*"},
-		AllowWildcard: true,
-		AllowMethods:  []string{"GET", "POST"},
-		AllowHeaders:  []string{"Origin", "Content-Type"},
-		MaxAge:        12 * time.Hour,
-	}))
-
+	// init DB connection + configuration
 	if err := InitMongo(); err != nil {
 		log.Fatalf("unable to create MongoDB connection: %v", err)
 	}
@@ -54,14 +44,31 @@ func main() {
 		log.Fatalf("unable to init JWT Validator: %v", err)
 	}
 
-	// bundle the mongo DB collection and jwt parser together
+	// bundle the mongo DB collection and jwt parser together into a config
 	conf := config{userColl{userCollection}, jwtValidtor}
+
+	// init gin router and init prometheus metric middleware
+	metricReg := prometrics.NewRegistry()
+	router := gin.Default()
+
+	// config gin
+	router.Use(metricReg.ReportDuration(nil))
+	router.Use(metricReg.ReportConcurrentReq())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:  []string{"http://localhost:*"},
+		AllowWildcard: true,
+		AllowMethods:  []string{"GET", "POST"},
+		AllowHeaders:  []string{"Origin", "Content-Type"},
+		MaxAge:        12 * time.Hour,
+	}))
+
 
 	// use generic error-handling middleware
 	router.Use(errors.HandleErrors())
 	UseUserRoutes(router, conf)
 
-	// init mongo cluster connection
+	// expose prometheus metrics
+	router.GET("/metrics", metricReg.DefaultHandler)
 
 	if err := router.Run(":4000"); err != nil {
 		log.Fatalf("unable to run auth service: %v", err)

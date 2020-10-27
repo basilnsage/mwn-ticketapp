@@ -1,0 +1,38 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prometheus
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+    template:
+      metadata:
+        labels:
+          app: prometheus
+          service: prometheus
+      spec:
+        containers:
+          - name: prometheus
+            image: prom/prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-svc
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: prometheus
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+...
