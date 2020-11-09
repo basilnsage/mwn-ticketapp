@@ -1,0 +1,42 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        service: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus
+          volumeMounts:
+            - name: prom-config
+              mountPath: /etc/prometheus/
+              readOnly: true
+      volumes:
+        - name: prom-config
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-svc
+spec:
+  type: NodePort
+  selector:
+    app: prometheus
+  ports:
+    - name: prometheus
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+...

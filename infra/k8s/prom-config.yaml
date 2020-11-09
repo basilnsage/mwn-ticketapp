@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      external_labels:
+        monitor: prom-monitor
+    scrape_configs:
+      - job_name: prometheus
+        scrape_interval: 5s
+        static_configs:
+          - targets:
+            - localhost:9090
+      - job_name: ticket-auth
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+            replacement: pod_label_$1
+          - source_labels:
+              - __meta_kubenetes_namespace
+            action: replace
+            target_label: kubenetes_namespace
+          - source_labels:
+              - __meta_kubenetes_pod_name
+            action: replace
+            target_label: kubernetes_name
+...

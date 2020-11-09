@@ -6,12 +6,12 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: auth-mongo
+      service: auth-mongo
   template:
     metadata:
       labels:
-        app: auth-mongo
-        service: auth
+        app: tickets
+        service: auth-mongo
     spec:
       containers:
         - name: auth-mongo
@@ -23,7 +23,7 @@ metadata:
   name: auth-mongo-svc
 spec:
   selector:
-    app: auth-mongo
+    service: auth-mongo
   ports:
     - name: db
       protocol: TCP
