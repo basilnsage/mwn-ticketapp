@@ -35,6 +35,12 @@ spec:
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasources
               readOnly: false
+            - mountPath: /etc/grafana/provisioning/dashboards
+              name: grafana-dashboards
+              readOnly: false
+            - mountPath: /grafana-dashboard-definitions/0/test
+              name: grafana-dashboard-test
+              readOnly: false
       securityContext:
         fsGroup: 65534
         runAsNonRoot: true

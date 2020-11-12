@@ -17,17 +17,20 @@ data:
             - localhost:9090
       - job_name: ticket-auth
         kubernetes_sd_configs:
-          - role: endpoints
+          - role: service
+            selectors:
+              - role: service
+                label: "service=auth"
         relabel_configs:
           - action: labelmap
             regex: __meta_kubernetes_pod_label_(.+)
             replacement: pod_label_$1
-          - source_labels:
-              - __meta_kubenetes_namespace
-            action: replace
-            target_label: kubenetes_namespace
-          - source_labels:
-              - __meta_kubenetes_pod_name
-            action: replace
+          - action: replace
+            source_labels:
+              - __meta_kubernetes_namespace
+            target_label: kubernetes_namespace
+          - action: replace
+            source_labels:
+              - __meta_kubernetes_pod_name
             target_label: kubernetes_name
 ...
