@@ -1,0 +1,54 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: grafana
+  name: grafana
+spec:
+  selector:
+    matchLabels:
+      service: grafana
+  template:
+    metadata:
+      labels:
+        service: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          ports:
+            - containerPort: 3000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+          volumeMounts:
+            - mountPath: /var/lib/storage
+              name: grafana-storage
+              readOnly: false
+            - mountPath: /etc/grafana/provisioning/datasources
+              name: grafana-datasources
+              readOnly: false
+      securityContext:
+        fsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+      serviceAccountName: grafana
+      volumes:
+      - emptyDir: {}
+        name: grafana-storage
+      - name: grafana-datasources
+        secret:
+          secretName: grafana-datasources
+      - name: grafana-dashboards
+        configMap:
+            name: grafana-dashboards
+      - name: grafana-dashboard-test
+        configMap:
+            name: grafana-dashboard-test
