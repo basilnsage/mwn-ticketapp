@@ -340,7 +340,7 @@ data:
           "pluginVersion": "7.3.2",
           "targets": [
             {
-              "expr": "sum(increase(request_duration_seconds_count{code=~\"4\\\\d+\"}[$__range]))",
+              "expr": "sum(increase(request_duration_seconds_count{code=~\"400+\"}[$__range]))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "",
@@ -404,7 +404,7 @@ data:
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum(increase(request_duration_seconds_count{code=~\"4\\\\d+\", route!=\"/metrics\"}[$__range])) / sum(increase(request_duration_seconds_count{route!=\"/metrics\"}[$__range]))",
+              "expr": "sum(increase(request_duration_seconds_count{code=~\"400+\", route!=\"/metrics\"}[$__range])) / sum(increase(request_duration_seconds_count{route!=\"/metrics\"}[$__range]))",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{ resource }}",

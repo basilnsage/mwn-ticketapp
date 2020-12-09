@@ -1,11 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"log"
 	"os"
 	"time"
 
-	"github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"github.com/basilnsage/mwn-ticketapp/auth/token"
 	"github.com/basilnsage/prometheus-gin-metrics"
 	"github.com/gin-contrib/cors"
@@ -52,8 +53,10 @@ func main() {
 	router := gin.Default()
 
 	// config gin
+	fmt.Println("set duration middleware")
 	router.Use(metricReg.ReportDuration(nil))
-	router.Use(metricReg.ReportConcurrentReq())
+	fmt.Println("set error handling middleware")
+	router.Use(errors.HandleErrors())
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{"http://localhost:*"},
 		AllowWildcard: true,
@@ -64,7 +67,6 @@ func main() {
 
 
 	// use generic error-handling middleware
-	router.Use(errors.HandleErrors())
 	UseUserRoutes(router, conf)
 
 	// expose prometheus metrics

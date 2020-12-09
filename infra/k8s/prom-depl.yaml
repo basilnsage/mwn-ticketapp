@@ -17,14 +17,24 @@ spec:
       containers:
         - name: prometheus
           image: prom/prometheus
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
           volumeMounts:
             - name: prom-config
               mountPath: /etc/prometheus/
               readOnly: true
+            - name: prom-storage
+              mountPath: /prometheus
+              readOnly: false
       volumes:
         - name: prom-config
           configMap:
             name: prometheus-config
+        - name: prom-storage
+          persistentVolumeClaim:
+              claimName: prom-storage-pvc
 ---
 apiVersion: v1
 kind: Service

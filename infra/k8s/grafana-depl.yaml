@@ -19,8 +19,8 @@ spec:
           image: grafana/grafana
           resources:
             limits:
-              memory: "256Mi"
-              cpu: "200m"
+              memory: "512Mi"
+              cpu: "500m"
           ports:
             - containerPort: 3000
               name: http
