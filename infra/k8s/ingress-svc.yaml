@@ -18,6 +18,10 @@ spec:
             backend:
               serviceName: auth-svc
               servicePort: 4000
+          - path: /api/tickets/?(.*)
+            backend:
+              serviceName: crud-svc
+              servicePort: 4000
           - path: /?(.*)
             backend:
               serviceName: client-svc

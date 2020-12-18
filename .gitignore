@@ -3,3 +3,4 @@ auth/auth
 *.proto
 node_modules/
 .next/
+crud/crud

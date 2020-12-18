@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crud-mongo-depl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: crud-mongo
+  template:
+    metadata:
+      labels:
+        app: tickets
+        service: crud-mongo
+    spec:
+      containers:
+        - name: crud-mongo
+          image: mongo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crud-mongo-svc
+spec:
+  selector:
+    service: crud-mongo
+  ports:
+    - name: db
+      protocol: TCP
+      port: 27017
+      targetPort: 27017
+...

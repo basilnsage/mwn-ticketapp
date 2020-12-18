@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crud-depl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: crud
+  template:
+    metadata:
+      labels:
+        app: tickets
+        service: crud
+    spec:
+      containers:
+        - name: crud
+          image: basilnsage/mwn-ticketapp.crud:latest
+          imagePullPolicy: Never
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: 500m 
+          env:
+            - name: MONGO_CONN_STR
+              value: mongodb://crud-mongo-svc:27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crud-svc
+  labels:
+    service: crud
+spec:
+  selector:
+    service: crud
+  ports:
+    - name: crud
+      protocol: TCP
+      port: 4000
+      targetPort: 4000
+...
