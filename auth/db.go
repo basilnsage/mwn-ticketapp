@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -54,13 +55,21 @@ func GetCollection(db *mongo.Database, coll string) *mongo.Collection {
 
 func (uc userColl) Read(ctx context.Context, user users.User) ([]users.User, error) {
 	var foundUsers []users.User
+	var res []bson.M
 	cursor, err := uc.c.Find(ctx, bson.M{"email": user.Email})
 	if err != nil {
 		return nil, fmt.Errorf("mongo.Collection.Find: %v", err)
 	}
 
-	if err = cursor.All(ctx, &foundUsers); err != nil {
+	if err = cursor.All(ctx, &res); err != nil {
 		return nil, fmt.Errorf("mongo.Cursor.All: %v", err)
+	}
+	for _, result := range res {
+		foundUsers = append(foundUsers, users.User{
+			Email: result["email"].(string),
+			Hash: result["hash"].(primitive.Binary).Data,
+			Uid: result["_id"],
+		})
 	}
 	return foundUsers, nil
 }

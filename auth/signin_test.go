@@ -16,28 +16,27 @@ func TestSignin(t *testing.T) {
 	signer := new(mockSigner)
 	crud := new(mockCRUD)
 	ctx := context.Background()
-	user, err := users.NewUser(email, pass, passHash)
-	if err != nil {
-		t.Fatalf("unable to create new user: %v", err)
-	}
-	//userBytes, err := proto.Marshal(&protos.SignIn{
-	//	Username: "foo@example.com",
-	//	Password: "password",
-	//})
+	//user, err := users.NewUser(email, pass, passHash)
 	//if err != nil {
-	//	t.Fatalf("unable to marshal user proto: %v", err)
+	//	t.Fatalf("unable to create new user: %v", err)
 	//}
+	user := &users.User{
+		Email: email,
+		Hash: passHash,
+		Uid: "0",
+	}
+
 	payload, err := json.Marshal(&userFormData{Username: email, Password: pass})
 	if err != nil {
 		t.Fatalf("json.marshal: %v", err)
 	}
 
-	//crud.On("Read", ctx, *user).Return([]users.User{*user}, nil)
 	crud.On("Read", ctx, mock.MatchedBy(checkTestUser)).Return([]users.User{*user}, nil)
 	crud.On("Write", ctx, mock.MatchedBy(checkTestUser)).Return(uid, nil)
+	//crud.On("Read", ctx, mock.MatchedBy(checkTestUser)).Return([]users.User{*user}, nil)
 	signer.On("Sign", map[string]interface{}{
 		"email": email,
-		"id":    nil,
+		"id":    "0",
 	}).Return(jwtString, nil)
 
 	gin.SetMode(gin.TestMode)
@@ -53,7 +52,6 @@ func TestSignin(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	//req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(userBytes))
 	req, err := http.NewRequest(http.MethodPost, "/test", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("http.NewRequest: %v", err)
