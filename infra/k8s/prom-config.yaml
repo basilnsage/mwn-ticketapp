@@ -16,11 +16,31 @@ data:
           - targets:
             - localhost:9090
       - job_name: ticket-auth
+        metrics_path: /auth/metrics
         kubernetes_sd_configs:
           - role: service
             selectors:
               - role: service
                 label: "service=auth"
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+            replacement: pod_label_$1
+          - action: replace
+            source_labels:
+              - __meta_kubernetes_namespace
+            target_label: kubernetes_namespace
+          - action: replace
+            source_labels:
+              - __meta_kubernetes_pod_name
+            target_label: kubernetes_name
+      - job_name: ticket-crud
+        metrics_path: /tickets/metrics
+        kubernetes_sd_configs:
+          - role: service
+            selectors:
+              - role: service
+                label: "service=crud"
         relabel_configs:
           - action: labelmap
             regex: __meta_kubernetes_pod_label_(.+)

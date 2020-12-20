@@ -31,10 +31,20 @@ func main() {
 		ErrorLogger.Print("missing mongo connection environment variable: MONGO_CONN_STR")
 		os.Exit(1)
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
 	defer cancel()
-	router, err := newRouter(ctx, dbConnStr, dbName, collName)
+	crud, err := newCrud(ctx, dbConnStr, dbName, collName)
+	if err != nil {
+		ErrorLogger.Printf("unable to create DB crud wrapper: %v", err)
+	}
+
+	jwtKey, ok := os.LookupEnv("JWT_SIGN_KEY")
+	if !ok {
+		ErrorLogger.Print("missing JWT HS256 signing key: JWT_SIGN_KEY")
+		os.Exit(1)
+	}
+
+	router, err := newRouter(jwtKey, crud)
 	if err != nil {
 		ErrorLogger.Printf("could not create new gin router")
 		os.Exit(1)

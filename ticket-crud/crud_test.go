@@ -26,6 +26,13 @@ type fakeMongoCollection struct {
 	id int
 }
 
+func newFakeMongoCollection() *fakeMongoCollection {
+	return &fakeMongoCollection{
+		make(map[string]*Ticket),
+		0,
+	}
+}
+
 func (f *fakeMongoCollection) Create(title string, price float64) (interface{}, error) {
 	if title == "should error" {
 		return nil, errors.New("unable to create ticket")
@@ -49,15 +56,12 @@ func (f *fakeMongoCollection) Update(id interface{}, title string, price float64
 }
 
 func TestCreate(t *testing.T) {
-	fakeMongo := fakeMongoCollection{
-		make(map[string]*Ticket),
-		0,
-	}
+	fakeMongo := newFakeMongoCollection()
 	resp := httptest.NewRecorder()
 	gin.SetMode(gin.TestMode)
 	c, r := gin.CreateTestContext(resp)
 	r.POST("/test", func(c *gin.Context) {
-		serveCreate(c, &fakeMongo)
+		serveCreate(c, fakeMongo)
 	})
 
 	tik := Ticket{"foo", 0.0}
@@ -89,7 +93,7 @@ func TestCreate(t *testing.T) {
 	resp = httptest.NewRecorder()
 	c, r = gin.CreateTestContext(resp)
 	r.POST("/test", func(c *gin.Context) {
-		serveCreate(c, &fakeMongo)
+		serveCreate(c, fakeMongo)
 	})
 	reqBody, _ = json.Marshal(tik)
 	c.Request = httptest.NewRequest("POST", "/test", bytes.NewReader(reqBody))
@@ -110,5 +114,77 @@ func TestCreate(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
 		t.Errorf("incorrect errors reported, diff: %v", diff)
+	}
+}
+
+// to test:
+// 401 from req without a JWT header
+// 401 from req with an invalid JWT header
+// 201 from req with a valid JWT header
+func TestIntegration(t *testing.T) {
+	fakeMongo := newFakeMongoCollection()
+	router, _ := newRouter("password", fakeMongo)
+	gin.SetMode(gin.TestMode)
+
+	// reuse the same JSON body for all requests
+	tik := Ticket{"testing ticket", 1.0}
+	tikJson, _ := json.Marshal(&tik)
+	type ErrResp struct {
+		Errors []string
+	}
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
+
+	// no auth-jwt header should result in a 401
+	router.ServeHTTP(resp, req)
+	if got, want := resp.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("no jwt header should be unauthorized, resp code: %v, want %v", got, want)
+	}
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	respJson := &ErrResp{}
+	_ = json.Unmarshal(respBody, respJson)
+	got, want := []string{"User is not signed in"}, respJson.Errors
+	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
+		t.Errorf("no jwt header led to unexpected error status, diff: %v", diff)
+	}
+
+	// bad auth-jwt header should result in a 401
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
+	// user: foo@bar.com, id: 1
+	req.Header.Add("auth-jwt", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.f9FeG_FD2vOW6sGQwGxCoGYNIZv1P_Sb7WBgjq99KOs")
+	router.ServeHTTP(resp, req)
+	if got, want := resp.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("no jwt header should be unauthorized, resp code: %v, want %v", got, want)
+	}
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	respJson = &ErrResp{}
+	_ = json.Unmarshal(respBody, respJson)
+	got, want = []string{"Unauthorized"}, respJson.Errors
+	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
+		t.Errorf("bad jwt header led to unexpected error status, diff: %v", diff)
+	}
+
+	// good auth-jwt header should result in a 201
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
+	// user: foo@bar.com, id: 1
+	req.Header.Add("auth-jwt", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.9DzMmA93ZeuJP1_tBm9yaznYUbtBwirW9YDt8KNDYBk")
+	router.ServeHTTP(resp, req)
+	if got, want := resp.Code, http.StatusCreated; got != want {
+		t.Errorf("good jwt header should be authorized, resp code: %v, want %v", got, want)
+	}
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	type GoodResp struct {
+		Title string
+		Price float64
+		Id string
+	}
+	goodRespJson := &GoodResp{}
+	_ = json.Unmarshal(respBody, goodRespJson)
+	goodGot, goodWant := goodRespJson, &GoodResp{"testing ticket", 1.0, "0"}
+	if diff := cmp.Diff(goodGot, goodWant); diff != "" {
+		t.Errorf("valid req did not return expected response: %v", diff)
 	}
 }

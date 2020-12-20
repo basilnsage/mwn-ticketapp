@@ -25,6 +25,11 @@ spec:
           env:
             - name: MONGO_CONN_STR
               value: mongodb://crud-mongo-svc:27017
+            - name: JWT_SIGN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: sign-key
 ---
 apiVersion: v1
 kind: Service

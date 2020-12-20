@@ -10,13 +10,17 @@ spec:
     - host: tickets.dev
       http:
         paths:
-          - path: /metrics
+          - path: /auth/metrics
             backend:
               serviceName: auth-svc
               servicePort: 4000
           - path: /api/users/?(.*)
             backend:
               serviceName: auth-svc
+              servicePort: 4000
+          - path: /tickets/metrics
+            backend:
+              serviceName: crud-svc
               servicePort: 4000
           - path: /api/tickets/?(.*)
             backend:

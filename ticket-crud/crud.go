@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	prometrics "github.com/basilnsage/prometheus-gin-metrics"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type MongoCollection interface {
@@ -30,15 +31,21 @@ type Ticket struct {
 	Price float64
 }
 
-func newRouter(ctx context.Context, connStr, db, coll string) (*gin.Engine, error) {
-	crud, err := newCrud(ctx, connStr, db, coll)
+func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
+	userValidator, err := userAuthMiddleware(jwtKey)
 	if err != nil {
-		return nil, fmt.Errorf("newCrud: %v", err)
+		return nil, fmt.Errorf("unable to init user validation middleware: %v", err)
 	}
 
 	r := gin.Default()
+	promRegistry := prometrics.NewRegistry()
+	r.Use(promRegistry.ReportDuration(
+		[]float64{0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
+	))
+
+	r.GET("/tickets/metrics", promRegistry.DefaultHandler)
 	ticketRoutes := r.Group("/api/tickets")
-	ticketRoutes.POST("/create", func(c *gin.Context) {
+	ticketRoutes.POST("/create", userValidator, func(c *gin.Context) {
 		serveCreate(c, crud)
 	})
 
@@ -121,6 +128,7 @@ func serveCreate(c *gin.Context, crud MongoCollection) {
 	}
 
 	// return object ID, title, price
+	// TODO: define response struct somewhere for testing
 	c.JSON(http.StatusCreated, gin.H{
 		"id": tikId,
 		"title": tik.Title,
