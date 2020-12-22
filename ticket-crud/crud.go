@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	prometrics "github.com/basilnsage/prometheus-gin-metrics"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/basilnsage/mwn-ticketapp/middleware"
+	prometrics "github.com/basilnsage/prometheus-gin-metrics"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,7 +17,7 @@ import (
 )
 
 type MongoCollection interface {
-	Create(string, float64) (interface{}, error)
+	Create(string, float64, string) (string, error)
 	ReadOne(interface{}) (*Ticket, error)
 	ReadAll() ([]*Ticket, error)
 	Update(interface{}, string, float64) (interface{}, error)
@@ -29,12 +30,25 @@ type CRUD struct {
 type Ticket struct {
 	Title string
 	Price float64
+	Owner string `json:"id"`
+}
+
+type TicketReq struct {
+	Title string
+	Price float64
+}
+
+type TicketResp struct {
+	Title string
+	Price float64
+	Owner string
+	Id string
 }
 
 func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
-	userValidator, err := userAuthMiddleware(jwtKey)
+	jwtValidator, err := middleware.NewJWTValidator([]byte(jwtKey), "HS256")
 	if err != nil {
-		return nil, fmt.Errorf("unable to init user validation middleware: %v", err)
+		return nil, fmt.Errorf("NewJWTValidator: %v", err)
 	}
 
 	r := gin.Default()
@@ -45,9 +59,13 @@ func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
 
 	r.GET("/tickets/metrics", promRegistry.DefaultHandler)
 	ticketRoutes := r.Group("/api/tickets")
-	ticketRoutes.POST("/create", userValidator, func(c *gin.Context) {
-		serveCreate(c, crud)
-	})
+	ticketRoutes.POST(
+		"/create",
+		middleware.UserValidator(jwtValidator, "auth-jwt"),
+		func(c *gin.Context) {
+			serveCreate(c, crud, jwtValidator)
+		},
+	)
 
 	return r, nil
 }
@@ -67,12 +85,12 @@ func newCrud(ctx context.Context, connStr string, db string, coll string) (Mongo
 	return &CRUD{client.Database(db).Collection(coll)}, nil
 }
 
-func (c *CRUD) Create(title string, price float64) (interface{}, error) {
+func (c *CRUD) Create(title string, price float64, owner string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 	defer cancel()
-	res, err := c.coll.InsertOne(ctx, bson.M{"title": title, "price": price})
+	res, err := c.coll.InsertOne(ctx, bson.M{"title": title, "price": price, "owner": owner})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	id := res.InsertedID.(primitive.ObjectID)
 	return id.Hex(), nil
@@ -90,16 +108,35 @@ func (c *CRUD) Update(id interface{}, title string, price float64) (interface{},
 	return nil, nil
 }
 
-func serveCreate(c *gin.Context, crud MongoCollection) {
+func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidator) {
 	// parse gin context for JSON body
-	tik := new(Ticket)
-	if err := c.BindJSON(tik); err != nil {
+	var tik TicketReq
+	if err := c.BindJSON(&tik); err != nil {
 		WarningLogger.Printf("could not parse body of request, err: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"errors": []string{"unable to process request"},
 		})
 		return
 	}
+
+	// parse user id from auth-jwt header
+	jwtHeader := c.GetHeader("auth-jwt")
+	if jwtHeader == "" {
+		ErrorLogger.Print("no auth-jwt header found while creating ticket. This should never happen")
+		c.JSON(http.StatusInternalServerError, gin.H {
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	var userClaims middleware.UserClaims
+	if err := userClaims.NewFromToken(v, jwtHeader); err != nil {
+		ErrorLogger.Printf("could not parse auth-jwt header while creating ticket: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H {
+			"errors": []string{"Internal server error"},
+		})
+	}
+	uid := userClaims.Id
 
 	// validate fields
 	var validationErrors []string
@@ -109,6 +146,7 @@ func serveCreate(c *gin.Context, crud MongoCollection) {
 	if tik.Price < 0.0 {
 		validationErrors = append(validationErrors, "price cannot be less than 0")
 	}
+
 	if len(validationErrors) > 0 {
 		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -118,7 +156,7 @@ func serveCreate(c *gin.Context, crud MongoCollection) {
 	}
 
 	// insert new ticket object into DB
-	tikId, err := crud.Create(tik.Title, tik.Price)
+	tikId, err := crud.Create(tik.Title, tik.Price, uid)
 	if err != nil {
 		ErrorLogger.Printf("failed to write ticket to database, err: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -129,10 +167,11 @@ func serveCreate(c *gin.Context, crud MongoCollection) {
 
 	// return object ID, title, price
 	// TODO: define response struct somewhere for testing
-	c.JSON(http.StatusCreated, gin.H{
-		"id": tikId,
-		"title": tik.Title,
-		"price": tik.Price,
+	c.JSON(http.StatusCreated, TicketResp{
+		Title: tik.Title,
+		Price: tik.Price,
+		Owner: uid,
+		Id: tikId,
 	})
 	InfoLogger.Printf("new ticket saved with id: %v", tikId)
 }

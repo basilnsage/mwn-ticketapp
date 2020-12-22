@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/aws/aws-sdk-go v1.36.7 // indirect
+	github.com/basilnsage/mwn-ticketapp/middleware v0.0.0-20201222181933-7a8953a61d59
 	github.com/basilnsage/mwn-ticketapp/tik-jwt v0.0.0-20201219013536-d7a533a0f41f
 	github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -19,10 +20,11 @@ require (
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/prometheus/client_golang v1.9.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
-	github.com/ugorji/go v1.2.1 // indirect
+	github.com/ugorji/go v1.2.2 // indirect
 	go.mongodb.org/mongo-driver v1.4.4
-	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620 // indirect
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a // indirect
+	golang.org/x/sys v0.0.0-20201221093633-bc327ba9c2f0 // indirect
 	golang.org/x/text v0.3.4 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
