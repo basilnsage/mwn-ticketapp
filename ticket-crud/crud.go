@@ -18,7 +18,7 @@ import (
 
 type MongoCollection interface {
 	Create(string, float64, string) (string, error)
-	ReadOne(interface{}) (*Ticket, error)
+	ReadOne(string) (*TicketResp, error)
 	ReadAll() ([]*Ticket, error)
 	Update(interface{}, string, float64) (interface{}, error)
 }
@@ -42,7 +42,7 @@ type TicketResp struct {
 	Title string
 	Price float64
 	Owner string
-	Id string
+	Id    string `bson:"_id"`
 }
 
 func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
@@ -66,6 +66,9 @@ func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
 			serveCreate(c, crud, jwtValidator)
 		},
 	)
+	ticketRoutes.GET("/:id", func(c *gin.Context) {
+		serveReadOne(c, crud)
+	})
 
 	return r, nil
 }
@@ -86,7 +89,7 @@ func newCrud(ctx context.Context, connStr string, db string, coll string) (Mongo
 }
 
 func (c *CRUD) Create(title string, price float64, owner string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	res, err := c.coll.InsertOne(ctx, bson.M{"title": title, "price": price, "owner": owner})
 	if err != nil {
@@ -96,8 +99,24 @@ func (c *CRUD) Create(title string, price float64, owner string) (string, error)
 	return id.Hex(), nil
 }
 
-func (c *CRUD) ReadOne(id interface{}) (*Ticket, error) {
-	return nil, nil
+func (c *CRUD) ReadOne(id string) (*TicketResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	mId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+
+	tik := &TicketResp{}
+	res := c.coll.FindOne(ctx, bson.M{"_id": mId})
+	if err := res.Decode(tik); err == mongo.ErrNoDocuments {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	return tik, nil
 }
 
 func (c *CRUD) ReadAll() ([]*Ticket, error) {
@@ -123,7 +142,7 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	jwtHeader := c.GetHeader("auth-jwt")
 	if jwtHeader == "" {
 		ErrorLogger.Print("no auth-jwt header found while creating ticket. This should never happen")
-		c.JSON(http.StatusInternalServerError, gin.H {
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"errors": []string{"Internal server error"},
 		})
 		return
@@ -132,7 +151,7 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	var userClaims middleware.UserClaims
 	if err := userClaims.NewFromToken(v, jwtHeader); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header while creating ticket: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H {
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"errors": []string{"Internal server error"},
 		})
 	}
@@ -171,7 +190,27 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 		Title: tik.Title,
 		Price: tik.Price,
 		Owner: uid,
-		Id: tikId,
+		Id:    tikId,
 	})
 	InfoLogger.Printf("new ticket saved with id: %v", tikId)
+}
+
+func serveReadOne(c *gin.Context, crud MongoCollection) {
+	id := c.Param("id")
+	tik, err := crud.ReadOne(id)
+
+	if err != nil {
+		ErrorLogger.Printf("unable to fetch ticket from DB: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	if tik == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	c.JSON(http.StatusOK, tik)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,7 @@ var cmpStringSplitter = cmpopts.AcyclicTransformer("StringSplitter", func(s stri
 
 type fakeMongoCollection struct {
 	tickets map[string]*TicketResp
-	id int
+	id      int
 }
 
 func newFakeMongoCollection() *fakeMongoCollection {
@@ -44,8 +45,12 @@ func (f *fakeMongoCollection) Create(title string, price float64, owner string) 
 	return currId, nil
 }
 
-func (f *fakeMongoCollection) ReadOne(id interface{}) (*Ticket, error) {
-	return nil, nil
+func (f *fakeMongoCollection) ReadOne(id string) (*TicketResp, error) {
+	tik, ok := f.tickets[id]
+	if !ok {
+		return nil, nil
+	}
+	return tik, nil
 }
 
 func (f *fakeMongoCollection) ReadAll() ([]*Ticket, error) {
@@ -61,8 +66,8 @@ func TestCreate(t *testing.T) {
 	v, _ := middleware.NewJWTValidator([]byte("password"), "HS256")
 	authHeader, _ := middleware.NewUserClaims("foo@bar.com", "0").Tokenize(v)
 
-	resp := httptest.NewRecorder()
 	gin.SetMode(gin.TestMode)
+	resp := httptest.NewRecorder()
 	_, r := gin.CreateTestContext(resp)
 	r.POST("/test", func(c *gin.Context) {
 		serveCreate(c, fakeMongo, v)
@@ -77,20 +82,11 @@ func TestCreate(t *testing.T) {
 		t.Errorf("incorrect status code, got: %v want: %v", got, want)
 	}
 
-	respBody,_ := ioutil.ReadAll(resp.Body)
+	respBody, _ := ioutil.ReadAll(resp.Body)
 	var respTik TicketResp
 	_ = json.Unmarshal(respBody, &respTik)
-	if got, want := respTik.Title, "foo"; got != want {
-		t.Errorf("incorrect title, got: %v, want: %v", got, want)
-	}
-	if got, want := respTik.Price, 0.0; got != want {
-		t.Errorf("incorrect price, got: %v, want: %v", got, want)
-	}
-	if got, want := respTik.Id, "0"; got != want {
-		t.Errorf("incorrect ID, got: %v, want: %v", got, want)
-	}
-	if got, want := respTik.Owner, "0"; got != want {
-		t.Errorf("incorrect ID, got: %v, want: %v", got, want)
+	if diff := cmp.Diff(respTik, TicketResp{"foo", 0.0, "0", "0"}); diff != "" {
+		t.Errorf("ticket response incorrect: %v", diff)
 	}
 
 	tik = TicketReq{"", -1.0}
@@ -108,17 +104,46 @@ func TestCreate(t *testing.T) {
 	if got, want := resp.Code, http.StatusBadRequest; got != want {
 		t.Errorf("incorrect status code, got: %v want: %v", got, want)
 	}
-	respStatus := &struct {
+	var respStatus struct {
 		Errors []string
-	}{}
-	_ = json.Unmarshal(respBody, respStatus)
-	got := respStatus.Errors
-	want := []string{
+	}
+	_ = json.Unmarshal(respBody, &respStatus)
+	if diff := cmp.Diff(respStatus.Errors, []string{
 		"please specify a title",
 		"price cannot be less than 0",
-	}
-	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
+	}, cmpStringSplitter); diff != "" {
 		t.Errorf("incorrect errors reported, diff: %v", diff)
+	}
+}
+
+// test the route directly since it is a thin wrapper around serveReadOne
+func TestReadOne(t *testing.T) {
+	fakeMongo := newFakeMongoCollection()
+	router, _ := newRouter("password", fakeMongo)
+	gin.SetMode(gin.TestMode)
+
+	id, _ := fakeMongo.Create("testing", 1.0, "0")
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/tickets/%v", id), nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if got, want := resp.Code, http.StatusOK; got != want {
+		t.Errorf("unexpected response code: %v, want %v", got, want)
+	}
+
+	var tik TicketResp
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tik)
+	if diff := cmp.Diff(tik, TicketResp{"testing", 1.0, "0", "0"}); diff != "" {
+		t.Errorf("incorrect ticket returned: %v", diff)
+	}
+
+	req = httptest.NewRequest("GET", "/api/tickets/2", nil)
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if got, want := resp.Code, http.StatusNotFound; got != want {
+		t.Errorf("request for non-existent ticket resp code: %v, want %v", got, want)
 	}
 }
 

@@ -8,20 +8,20 @@ import (
 )
 
 const (
-	dbName = "app"
+	dbName   = "app"
 	collName = "ticket"
 )
 
 var (
-	InfoLogger *log.Logger
+	InfoLogger    *log.Logger
 	WarningLogger *log.Logger
-	ErrorLogger *log.Logger
+	ErrorLogger   *log.Logger
 )
 
 func init() {
-	InfoLogger = log.New(os.Stdout, "INFO: ", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-	WarningLogger = log.New(os.Stdout, "WARNING: ", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-	ErrorLogger = log.New(os.Stdout, "ERROR: ", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	InfoLogger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	WarningLogger = log.New(os.Stdout, "WARNING: ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	ErrorLogger = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
 }
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 		ErrorLogger.Print("missing mongo connection environment variable: MONGO_CONN_STR")
 		os.Exit(1)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	crud, err := newCrud(ctx, dbConnStr, dbName, collName)
 	if err != nil {
