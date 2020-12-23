@@ -4,3 +4,4 @@ auth/auth
 node_modules/
 .next/
 crud/crud
+ticket-crud/ticket-crud

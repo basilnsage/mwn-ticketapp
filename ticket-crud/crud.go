@@ -19,18 +19,12 @@ import (
 type MongoCollection interface {
 	Create(string, float64, string) (string, error)
 	ReadOne(string) (*TicketResp, error)
-	ReadAll() ([]*Ticket, error)
+	ReadAll() ([]TicketResp, error)
 	Update(interface{}, string, float64) (interface{}, error)
 }
 
 type CRUD struct {
 	coll *mongo.Collection
-}
-
-type Ticket struct {
-	Title string
-	Price float64
-	Owner string `json:"id"`
 }
 
 type TicketReq struct {
@@ -66,6 +60,9 @@ func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
 			serveCreate(c, crud, jwtValidator)
 		},
 	)
+	ticketRoutes.GET("", func(c *gin.Context) {
+		serveReadAll(c, crud)
+	})
 	ticketRoutes.GET("/:id", func(c *gin.Context) {
 		serveReadOne(c, crud)
 	})
@@ -119,8 +116,21 @@ func (c *CRUD) ReadOne(id string) (*TicketResp, error) {
 	return tik, nil
 }
 
-func (c *CRUD) ReadAll() ([]*Ticket, error) {
-	return nil, nil
+func (c *CRUD) ReadAll() ([]TicketResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var results []TicketResp
+	cursor, err := c.coll.Find(ctx, bson.D{})
+	if err != nil {
+		return []TicketResp{}, err
+	}
+
+	if err := cursor.All(ctx, &results); err != nil {
+		return []TicketResp{}, err
+	}
+
+	return results, nil
 }
 
 func (c *CRUD) Update(id interface{}, title string, price float64) (interface{}, error) {
@@ -213,4 +223,19 @@ func serveReadOne(c *gin.Context, crud MongoCollection) {
 	}
 
 	c.JSON(http.StatusOK, tik)
+}
+
+func serveReadAll(c *gin.Context, crud MongoCollection) {
+	tickets, err := crud.ReadAll()
+	if err != nil {
+		ErrorLogger.Printf("unable to fetch all tickets from DB: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"tickets": tickets,
+	})
 }

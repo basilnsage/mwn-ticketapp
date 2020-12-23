@@ -53,8 +53,12 @@ func (f *fakeMongoCollection) ReadOne(id string) (*TicketResp, error) {
 	return tik, nil
 }
 
-func (f *fakeMongoCollection) ReadAll() ([]*Ticket, error) {
-	return nil, nil
+func (f *fakeMongoCollection) ReadAll() ([]TicketResp, error) {
+	resp := make([]TicketResp, 0)
+	for _, v := range f.tickets {
+		resp = append(resp, *v)
+	}
+	return resp, nil
 }
 
 func (f *fakeMongoCollection) Update(id interface{}, title string, price float64) (interface{}, error) {
@@ -119,8 +123,8 @@ func TestCreate(t *testing.T) {
 // test the route directly since it is a thin wrapper around serveReadOne
 func TestReadOne(t *testing.T) {
 	fakeMongo := newFakeMongoCollection()
-	router, _ := newRouter("password", fakeMongo)
 	gin.SetMode(gin.TestMode)
+	router, _ := newRouter("password", fakeMongo)
 
 	id, _ := fakeMongo.Create("testing", 1.0, "0")
 	req := httptest.NewRequest("GET", fmt.Sprintf("/api/tickets/%v", id), nil)
@@ -144,6 +148,33 @@ func TestReadOne(t *testing.T) {
 
 	if got, want := resp.Code, http.StatusNotFound; got != want {
 		t.Errorf("request for non-existent ticket resp code: %v, want %v", got, want)
+	}
+}
+
+func TestReadAll(t *testing.T) {
+	fakeMongo := newFakeMongoCollection()
+	gin.SetMode(gin.TestMode)
+	router, _ := newRouter("password", fakeMongo)
+
+	for i := 0; i < 3; i++ {
+		_, _ = fakeMongo.Create("testing", 1.0, "0")
+	}
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/tickets", nil)
+	router.ServeHTTP(resp, req)
+
+	var tickets struct {
+		Tickets []TicketResp
+	}
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tickets)
+
+	if got, want := resp.Code, http.StatusOK; got != want {
+		t.Errorf("ReadAll bad response code: %v, want %v", got, want)
+	}
+	if got, want := len(tickets.Tickets), 3; got != want {
+		t.Errorf("did not fetch correct number of tickets: %v, want %v", got, want)
 	}
 }
 
