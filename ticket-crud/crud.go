@@ -39,6 +39,10 @@ type TicketResp struct {
 	Id    string `bson:"_id"`
 }
 
+type ErrorResp struct {
+	Errors []string `json:"errors"`
+}
+
 func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
 	jwtValidator, err := middleware.NewJWTValidator([]byte(jwtKey), "HS256")
 	if err != nil {
@@ -162,9 +166,7 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	var tik TicketReq
 	if err := c.BindJSON(&tik); err != nil {
 		WarningLogger.Printf("could not parse body of request, err: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": []string{"unable to process request"},
-		})
+		c.JSON(http.StatusBadRequest, ErrorResp{[]string{"unable to process request"}})
 		return
 	}
 
@@ -172,18 +174,14 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	jwtHeader := c.GetHeader("auth-jwt")
 	if jwtHeader == "" {
 		ErrorLogger.Print("no auth-jwt header found while creating ticket. This should never happen")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
 	var userClaims middleware.UserClaims
 	if err := userClaims.NewFromToken(v, jwtHeader); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header while creating ticket: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 	}
 	uid := userClaims.Id
 
@@ -198,9 +196,7 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 
 	if len(validationErrors) > 0 {
 		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": validationErrors,
-		})
+		c.JSON(http.StatusBadRequest, ErrorResp{validationErrors})
 		return
 	}
 
@@ -208,14 +204,11 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	tikId, err := crud.Create(tik.Title, tik.Price, uid)
 	if err != nil {
 		ErrorLogger.Printf("failed to write ticket to database, err: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"unable to save ticket"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"unable to save ticket"}})
 		return
 	}
 
 	// return object ID, title, price
-	// TODO: define response struct somewhere for testing
 	c.JSON(http.StatusCreated, TicketResp{
 		Title: tik.Title,
 		Price: tik.Price,
@@ -231,9 +224,7 @@ func serveReadOne(c *gin.Context, crud MongoCollection) {
 
 	if err != nil {
 		ErrorLogger.Printf("unable to fetch ticket from DB: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
@@ -249,9 +240,7 @@ func serveReadAll(c *gin.Context, crud MongoCollection) {
 	tickets, err := crud.ReadAll()
 	if err != nil {
 		ErrorLogger.Printf("unable to fetch all tickets from DB: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
@@ -269,9 +258,7 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	}
 	if err != nil {
 		ErrorLogger.Printf("could not read ticket from DB: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
@@ -280,30 +267,26 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	userJWT := c.GetHeader("auth-jwt")
 	if userJWT == "" {
 		ErrorLogger.Print("no auth-jwt header found! this should never happen")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
 	reqUser := new(middleware.UserClaims)
 	if err = reqUser.NewFromToken(v, userJWT); err != nil {
 		ErrorLogger.Printf("unable to parse auth-jwt header! This should never happen")
-		c.Status(http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, ErrorResp{[]string{"Unauthorized"}})
 		return
 	}
 
 	if tik.Owner != reqUser.Id {
-		c.Status(http.StatusUnauthorized)
+		c.JSON(http.StatusUnauthorized, ErrorResp{[]string{"Unauthorized"}})
 		return
 	}
 
 	var tikReq TicketReq
 	if err := c.BindJSON(&tikReq); err != nil {
 		WarningLogger.Printf("could not parse body of request, err: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": []string{"unable to process request"},
-		})
+		c.JSON(http.StatusBadRequest, ErrorResp{[]string{"unable to process request"}})
 		return
 	}
 
@@ -317,9 +300,7 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	}
 	if len(validationErrors) > 0 {
 		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
-		c.JSON(http.StatusBadRequest, gin.H{
-			"errors": validationErrors,
-		})
+		c.JSON(http.StatusBadRequest, ErrorResp{validationErrors})
 		return
 	}
 
@@ -331,9 +312,7 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	}
 	if err != nil {
 		ErrorLogger.Printf("unable to update ticket in DB: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"errors": []string{"Internal server error"},
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 

@@ -4,24 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/basilnsage/mwn-ticketapp/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
-
-// directly from https://pkg.go.dev/github.com/google/go-cmp@v0.5.4/cmp/cmpopts
-var cmpStringSplitter = cmpopts.AcyclicTransformer("StringSplitter", func(s string) []string {
-	return strings.Split(s, "\n")
-})
 
 type fakeMongoCollection struct {
 	tickets map[string]*TicketResp
@@ -72,89 +64,192 @@ func (f *fakeMongoCollection) Update(id string, title string, price float64) (bo
 	return true, nil
 }
 
-func TestCreate(t *testing.T) {
+func newTestInfra() (*gin.Engine, *middleware.JWTValidator, error) {
 	fakeMongo := newFakeMongoCollection()
-	v, _ := middleware.NewJWTValidator([]byte("password"), "HS256")
-	authHeader, _ := middleware.NewUserClaims("foo@bar.com", "0").Tokenize(v)
-
 	gin.SetMode(gin.TestMode)
-	resp := httptest.NewRecorder()
-	_, r := gin.CreateTestContext(resp)
-	r.POST("/test", func(c *gin.Context) {
-		serveCreate(c, fakeMongo, v)
-	})
-
-	tik := TicketReq{"foo", 0.0}
-	reqBody, _ := json.Marshal(tik)
-	req := httptest.NewRequest("POST", "/test", bytes.NewReader(reqBody))
-	req.Header.Add("auth-jwt", authHeader)
-	r.ServeHTTP(resp, req)
-	if got, want := resp.Code, http.StatusCreated; got != want {
-		t.Errorf("incorrect status code, got: %v want: %v", got, want)
+	router, err := newRouter("password", fakeMongo)
+	if err != nil {
+		return nil, nil, err
+	}
+	v, err := middleware.NewJWTValidator([]byte("password"), "HS256")
+	if err != nil {
+		return nil, nil, err
 	}
 
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	var respTik TicketResp
-	_ = json.Unmarshal(respBody, &respTik)
-	if diff := cmp.Diff(respTik, TicketResp{"foo", 0.0, "0", "0"}); diff != "" {
-		t.Errorf("ticket response incorrect: %v", diff)
+	return router, v, nil
+}
+
+type test struct {
+	name         string
+	method       string
+	route        string
+	body         interface{}
+	headers      map[string]string
+	expectedCode int
+	expectedResp *TicketResp
+	expectedErr  *ErrorResp
+}
+
+func runTest(tests []test, router *gin.Engine, t *testing.T) (err error) {
+	for _, test := range tests {
+		// if body is not nil convert it into bytes
+		var body []byte
+		if test.body != nil {
+			if body, err = json.Marshal(test.body); err != nil {
+				return err
+			}
+		}
+
+		resp := httptest.NewRecorder()
+		req := httptest.NewRequest(test.method, test.route, bytes.NewReader(body))
+		for k, v := range test.headers {
+			req.Header.Set(k, v)
+		}
+		router.ServeHTTP(resp, req)
+
+		t.Run(test.name, func(currTest *testing.T) {
+			// check resp code if expected value specified by test
+			if test.expectedCode != -1 {
+				if got, want := resp.Code, test.expectedCode; got != want {
+					currTest.Fatalf("bad status code: got %v, want %v", got, want)
+				}
+			}
+
+			// check resp body if specified by test
+			if test.expectedResp != nil {
+				var respBody TicketResp
+				respBytes, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					currTest.Fatalf("ioutil.Readall: %v", err)
+				}
+				if err := json.Unmarshal(respBytes, &respBody); err != nil {
+					currTest.Fatalf("json.Unmarshal: %v", err)
+				}
+				if diff := cmp.Diff(respBody, *test.expectedResp); diff != "" {
+					currTest.Fatalf("bad response: %v", diff)
+				}
+			}
+
+			// check resp body if an err is expected
+			if test.expectedErr != nil {
+				var respBody ErrorResp
+				respBytes, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					currTest.Fatalf("ioutil.Readall: %v", err)
+				}
+				if err := json.Unmarshal(respBytes, &respBody); err != nil {
+					currTest.Fatalf("json.Unmarshal: %v", err)
+				}
+				if diff := cmp.Diff(respBody, *test.expectedErr); diff != "" {
+					currTest.Fatalf("bad error: %v", diff)
+				}
+			}
+		})
+	}
+	return nil
+}
+
+func TestCreate(t *testing.T) {
+	router, v, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	tik = TicketReq{"", -1.0}
-	resp = httptest.NewRecorder()
-	_, r = gin.CreateTestContext(resp)
-	r.POST("/test", func(c *gin.Context) {
-		serveCreate(c, fakeMongo, v)
-	})
-	reqBody, _ = json.Marshal(tik)
-	req = httptest.NewRequest("POST", "/test", bytes.NewReader(reqBody))
-	req.Header.Add("auth-jwt", authHeader)
-	r.ServeHTTP(resp, req)
-	respBody, _ = ioutil.ReadAll(resp.Body)
+	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
+	badUserJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.f9FeG_FD2vOW6sGQwGxCoGYNIZv1P_Sb7WBgjq99KOs"
 
-	if got, want := resp.Code, http.StatusBadRequest; got != want {
-		t.Errorf("incorrect status code, got: %v want: %v", got, want)
+	tests := []test{
+		{
+			"create test ticket",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"for testing", 0.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusCreated,
+			&TicketResp{"for testing", 0.0, "1", "0"},
+			nil,
+		},
+		{
+			"create ticket without jwt header",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"new test ticket", 10.0},
+			nil,
+			http.StatusUnauthorized,
+			nil,
+			&ErrorResp{[]string{"User is not signed in"}},
+		},
+		{
+			"create ticket with bad jwt header",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"new test ticket", 100.0},
+			map[string]string{"auth-jwt": badUserJWT},
+			http.StatusUnauthorized,
+			nil,
+			&ErrorResp{[]string{"Unauthorized"}},
+		},
+		{
+			"create ticket with bad payload",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"", -1000.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusBadRequest,
+			nil,
+			&ErrorResp{[]string{"please specify a title", "price cannot be less than 0"}},
+		},
 	}
-	var respStatus struct {
-		Errors []string
-	}
-	_ = json.Unmarshal(respBody, &respStatus)
-	if diff := cmp.Diff(respStatus.Errors, []string{
-		"please specify a title",
-		"price cannot be less than 0",
-	}, cmpStringSplitter); diff != "" {
-		t.Errorf("incorrect errors reported, diff: %v", diff)
+
+	if err := runTest(tests, router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
 	}
 }
 
 // test the route directly since it is a thin wrapper around serveReadOne
 func TestReadOne(t *testing.T) {
-	fakeMongo := newFakeMongoCollection()
-	gin.SetMode(gin.TestMode)
-	router, _ := newRouter("password", fakeMongo)
-
-	id, _ := fakeMongo.Create("testing", 1.0, "0")
-	req := httptest.NewRequest("GET", fmt.Sprintf("/api/tickets/%v", id), nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if got, want := resp.Code, http.StatusOK; got != want {
-		t.Errorf("unexpected response code: %v, want %v", got, want)
+	router, v, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	var tik TicketResp
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	_ = json.Unmarshal(respBody, &tik)
-	if diff := cmp.Diff(tik, TicketResp{"testing", 1.0, "0", "0"}); diff != "" {
-		t.Errorf("incorrect ticket returned: %v", diff)
+	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
+
+	tests := []test{
+		{
+			"create test ticket",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"for testing", 0.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusCreated,
+			&TicketResp{"for testing", 0.0, "1", "0"},
+			nil,
+		},
+		{
+			"get test ticket",
+			http.MethodGet,
+			"/api/tickets/0",
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusOK,
+			&TicketResp{"for testing", 0.0, "1", "0"},
+			nil,
+		},
+		{
+			"get nonexistent ticket",
+			http.MethodGet,
+			"/api/tickets/1",
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusNotFound,
+			nil,
+			nil,
+		},
 	}
 
-	req = httptest.NewRequest("GET", "/api/tickets/2", nil)
-	resp = httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if got, want := resp.Code, http.StatusNotFound; got != want {
-		t.Errorf("request for non-existent ticket resp code: %v, want %v", got, want)
+	if err := runTest(tests, router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
 	}
 }
 
@@ -186,165 +281,68 @@ func TestReadAll(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	fakeMongo := newFakeMongoCollection()
-	router, _ := newRouter("password", fakeMongo)
-	v, _ := middleware.NewJWTValidator([]byte("password"), "HS256")
+	router, v, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
+	}
+
 	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
-	gin.SetMode(gin.TestMode)
-
-	// create test ticket
-	tik := TicketReq{"base test ticket", 1.0}
-	tikJson, _ := json.Marshal(&tik)
-	resp := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/tickets/create", bytes.NewBuffer(tikJson))
-	req.Header.Set("auth-jwt", testUserJWT)
-	router.ServeHTTP(resp, req)
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	tikResp := TicketResp{}
-	_ = json.Unmarshal(respBody, &tikResp)
-	//tikId, tikOwner := tikResp.Id, tikResp.Owner
-	tikId := tikResp.Id
-
-	// 401 if trying to update a ticket that user does not own
 	badUserJWT, _ := middleware.NewUserClaims("bar@foo.com", "2").Tokenize(v)
-	tikUpdate := TicketReq{"test update", 2.0}
-	tikUpdateJson, _ := json.Marshal(&tikUpdate)
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
-	req.Header.Set("auth-jwt", badUserJWT)
-	router.ServeHTTP(resp, req)
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	_ = json.Unmarshal(respBody, &tikResp)
-	if got, want := resp.Code, http.StatusUnauthorized; got != want {
-		t.Errorf("update unowned ticket resp code: %v, want %v", got, want)
+
+	tests := []test{
+		{
+			"create test ticket",
+			http.MethodPost,
+			"/api/tickets/create",
+			TicketReq{"for testing", 0.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusCreated,
+			&TicketResp{"for testing", 0.0, "1", "0"},
+			nil,
+		},
+		{
+			"unauth update",
+			http.MethodPut,
+			"/api/tickets/0",
+			TicketReq{"test update", 2.0},
+			map[string]string{"auth-jwt": badUserJWT},
+			http.StatusUnauthorized,
+			nil,
+			&ErrorResp{[]string{"Unauthorized"}},
+		},
+		{
+			"malformed update",
+			http.MethodPut,
+			"/api/tickets/0",
+			TicketReq{"", -1.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusBadRequest,
+			nil,
+			&ErrorResp{[]string{"please specify a title", "price cannot be less than 0"}},
+		},
+		{
+			"successful update",
+			http.MethodPut,
+			"/api/tickets/0",
+			TicketReq{"this should be new", 10.0},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusOK,
+			&TicketResp{"this should be new", 10.0, "1", "0"},
+			nil,
+		},
+		{
+			"verify update persisted",
+			http.MethodGet,
+			"/api/tickets/0",
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusOK,
+			&TicketResp{"this should be new", 10.0, "1", "0"},
+			nil,
+		},
 	}
 
-	// 400 if invalid payload
-	tikUpdate = TicketReq{"", -1.0}
-	tikUpdateJson, _ = json.Marshal(&tikUpdate)
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
-	req.Header.Set("auth-jwt", testUserJWT)
-	router.ServeHTTP(resp, req)
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	_ = json.Unmarshal(respBody, &tikResp)
-	if got, want := resp.Code, http.StatusBadRequest; got != want {
-		t.Errorf("malformed update payload resp code: %v, want %v", got, want)
-	}
-	var respStatus struct {
-		Errors []string
-	}
-	_ = json.Unmarshal(respBody, &respStatus)
-	if diff := cmp.Diff(respStatus.Errors, []string{
-		"please specify a title",
-		"price cannot be less than 0",
-	}, cmpStringSplitter); diff != "" {
-		t.Errorf("incorrect errors reported, diff: %v", diff)
-	}
-
-	// 200 if update successful
-	tikUpdate = TicketReq{"successful update test", 0.0}
-	tikUpdateJson, _ = json.Marshal(&tikUpdate)
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
-	req.Header.Set("auth-jwt", testUserJWT)
-	router.ServeHTTP(resp, req)
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	_ = json.Unmarshal(respBody, &tikResp)
-	if got, want := resp.Code, http.StatusOK; got != want {
-		t.Errorf("update payload resp code: %v, want %v", got, want)
-	}
-	if diff := cmp.Diff(tikResp, TicketResp{
-		"successful update test",
-		0.0,
-		"1",
-		"0",
-	}); diff != "" {
-		t.Errorf("update payload did not yield correct response: %v", diff)
-	}
-
-	// verify updated ticket is actually persisted
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/tickets/%v", tikId), nil)
-	req.Header.Set("auth-jwt", testUserJWT)
-	router.ServeHTTP(resp, req)
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	_ = json.Unmarshal(respBody, &tikResp)
-	if diff := cmp.Diff(tikResp, TicketResp{
-		"successful update test",
-		0.0,
-		"1",
-		"0",
-	}); diff != "" {
-		t.Errorf("ticket update did not persist: %v", diff)
-	}
-
-}
-
-// to test:
-// 401 from req without a JWT header
-// 401 from req with an invalid JWT header
-// 201 from req with a valid JWT header
-func TestIntegration(t *testing.T) {
-	fakeMongo := newFakeMongoCollection()
-	router, _ := newRouter("password", fakeMongo)
-	gin.SetMode(gin.TestMode)
-
-	// reuse the same JSON body for all requests
-	tik := TicketReq{"testing ticket", 1.0}
-	tikJson, _ := json.Marshal(&tik)
-	type ErrResp struct {
-		Errors []string
-	}
-
-	resp := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
-
-	// no auth-jwt header should result in a 401
-	router.ServeHTTP(resp, req)
-	if got, want := resp.Code, http.StatusUnauthorized; got != want {
-		t.Errorf("no jwt header should be unauthorized, resp code: %v, want %v", got, want)
-	}
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	respJson := &ErrResp{}
-	_ = json.Unmarshal(respBody, respJson)
-	got, want := []string{"User is not signed in"}, respJson.Errors
-	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
-		t.Errorf("no jwt header led to unexpected error status, diff: %v", diff)
-	}
-
-	// bad auth-jwt header should result in a 401
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
-	// user: foo@bar.com, id: 1
-	req.Header.Add("auth-jwt", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.f9FeG_FD2vOW6sGQwGxCoGYNIZv1P_Sb7WBgjq99KOs")
-	router.ServeHTTP(resp, req)
-	if got, want := resp.Code, http.StatusUnauthorized; got != want {
-		t.Errorf("no jwt header should be unauthorized, resp code: %v, want %v", got, want)
-	}
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	respJson = &ErrResp{}
-	_ = json.Unmarshal(respBody, respJson)
-	got, want = []string{"Unauthorized"}, respJson.Errors
-	if diff := cmp.Diff(got, want, cmpStringSplitter); diff != "" {
-		t.Errorf("bad jwt header led to unexpected error status, diff: %v", diff)
-	}
-
-	// good auth-jwt header should result in a 201
-	v, _ := middleware.NewJWTValidator([]byte("password"), "HS256")
-	authHeader, _ := middleware.NewUserClaims("foo@bar.com", "0").Tokenize(v)
-
-	resp = httptest.NewRecorder()
-	req = httptest.NewRequest("POST", "/api/tickets/create", bytes.NewBuffer(tikJson))
-	req.Header.Add("auth-jwt", authHeader)
-	router.ServeHTTP(resp, req)
-	if got, want := resp.Code, http.StatusCreated; got != want {
-		t.Errorf("good jwt header should be authorized, resp code: %v, want %v", got, want)
-	}
-	respBody, _ = ioutil.ReadAll(resp.Body)
-	var goodResp TicketResp
-	_ = json.Unmarshal(respBody, &goodResp)
-	if diff := cmp.Diff(goodResp, TicketResp{"testing ticket", 1.0, "0", "0"}); diff != "" {
-		t.Errorf("valid req did not return expected response: %v", diff)
+	if err := runTest(tests, router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
 	}
 }
