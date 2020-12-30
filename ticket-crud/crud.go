@@ -20,7 +20,7 @@ type MongoCollection interface {
 	Create(string, float64, string) (string, error)
 	ReadOne(string) (*TicketResp, error)
 	ReadAll() ([]TicketResp, error)
-	Update(interface{}, string, float64) (interface{}, error)
+	Update(string, string, float64) (bool, error)
 }
 
 type CRUD struct {
@@ -65,6 +65,9 @@ func newRouter(jwtKey string, crud MongoCollection) (*gin.Engine, error) {
 	})
 	ticketRoutes.GET("/:id", func(c *gin.Context) {
 		serveReadOne(c, crud)
+	})
+	ticketRoutes.PUT("/:id", middleware.UserValidator(jwtValidator, "auth-jwt"), func(c *gin.Context) {
+		serveUpdate(c, crud, jwtValidator)
 	})
 
 	return r, nil
@@ -133,8 +136,25 @@ func (c *CRUD) ReadAll() ([]TicketResp, error) {
 	return results, nil
 }
 
-func (c *CRUD) Update(id interface{}, title string, price float64) (interface{}, error) {
-	return nil, nil
+func (c *CRUD) Update(id string, title string, price float64) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// convert hex ID string to mongo ObjectID
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return false, err
+	}
+
+	res, err := c.coll.UpdateOne(ctx, bson.M{"_id": objId}, bson.M{"$set": bson.M{"title": title, "price": price}})
+	if err != nil {
+		return false, err
+	}
+	if res.MatchedCount == 0 || res.ModifiedCount == 0 {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidator) {
@@ -237,5 +257,90 @@ func serveReadAll(c *gin.Context, crud MongoCollection) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"tickets": tickets,
+	})
+}
+
+func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidator) {
+	id := c.Param("id")
+	tik, err := crud.ReadOne(id)
+	if tik == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		ErrorLogger.Printf("could not read ticket from DB: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	// read ticket from DB without error
+	// make sure ticket owner matches downstream user id
+	userJWT := c.GetHeader("auth-jwt")
+	if userJWT == "" {
+		ErrorLogger.Print("no auth-jwt header found! this should never happen")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	reqUser := new(middleware.UserClaims)
+	if err = reqUser.NewFromToken(v, userJWT); err != nil {
+		ErrorLogger.Printf("unable to parse auth-jwt header! This should never happen")
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	if tik.Owner != reqUser.Id {
+		c.Status(http.StatusUnauthorized)
+		return
+	}
+
+	var tikReq TicketReq
+	if err := c.BindJSON(&tikReq); err != nil {
+		WarningLogger.Printf("could not parse body of request, err: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"errors": []string{"unable to process request"},
+		})
+		return
+	}
+
+	// validate fields
+	var validationErrors []string
+	if tikReq.Title == "" {
+		validationErrors = append(validationErrors, "please specify a title")
+	}
+	if tikReq.Price < 0.0 {
+		validationErrors = append(validationErrors, "price cannot be less than 0")
+	}
+	if len(validationErrors) > 0 {
+		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"errors": validationErrors,
+		})
+		return
+	}
+
+	ok, err := crud.Update(id, tikReq.Title, tikReq.Price)
+	if !ok {
+		WarningLogger.Printf("no DB record modified")
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		ErrorLogger.Printf("unable to update ticket in DB: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"errors": []string{"Internal server error"},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, TicketResp{
+		Title: tikReq.Title,
+		Price: tikReq.Price,
+		Owner: tik.Owner,
+		Id:    tik.Id,
 	})
 }

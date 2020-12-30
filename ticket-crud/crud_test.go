@@ -61,8 +61,15 @@ func (f *fakeMongoCollection) ReadAll() ([]TicketResp, error) {
 	return resp, nil
 }
 
-func (f *fakeMongoCollection) Update(id interface{}, title string, price float64) (interface{}, error) {
-	return nil, nil
+func (f *fakeMongoCollection) Update(id string, title string, price float64) (bool, error) {
+	item, ok := f.tickets[id]
+	if !ok {
+		return false, errors.New("no ticket with matching ID found")
+	}
+	item.Title = title
+	item.Price = price
+	f.tickets[id] = item
+	return true, nil
 }
 
 func TestCreate(t *testing.T) {
@@ -176,6 +183,102 @@ func TestReadAll(t *testing.T) {
 	if got, want := len(tickets.Tickets), 3; got != want {
 		t.Errorf("did not fetch correct number of tickets: %v, want %v", got, want)
 	}
+}
+
+func TestUpdate(t *testing.T) {
+	fakeMongo := newFakeMongoCollection()
+	router, _ := newRouter("password", fakeMongo)
+	v, _ := middleware.NewJWTValidator([]byte("password"), "HS256")
+	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
+	gin.SetMode(gin.TestMode)
+
+	// create test ticket
+	tik := TicketReq{"base test ticket", 1.0}
+	tikJson, _ := json.Marshal(&tik)
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/create", bytes.NewBuffer(tikJson))
+	req.Header.Set("auth-jwt", testUserJWT)
+	router.ServeHTTP(resp, req)
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	tikResp := TicketResp{}
+	_ = json.Unmarshal(respBody, &tikResp)
+	//tikId, tikOwner := tikResp.Id, tikResp.Owner
+	tikId := tikResp.Id
+
+	// 401 if trying to update a ticket that user does not own
+	badUserJWT, _ := middleware.NewUserClaims("bar@foo.com", "2").Tokenize(v)
+	tikUpdate := TicketReq{"test update", 2.0}
+	tikUpdateJson, _ := json.Marshal(&tikUpdate)
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
+	req.Header.Set("auth-jwt", badUserJWT)
+	router.ServeHTTP(resp, req)
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tikResp)
+	if got, want := resp.Code, http.StatusUnauthorized; got != want {
+		t.Errorf("update unowned ticket resp code: %v, want %v", got, want)
+	}
+
+	// 400 if invalid payload
+	tikUpdate = TicketReq{"", -1.0}
+	tikUpdateJson, _ = json.Marshal(&tikUpdate)
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
+	req.Header.Set("auth-jwt", testUserJWT)
+	router.ServeHTTP(resp, req)
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tikResp)
+	if got, want := resp.Code, http.StatusBadRequest; got != want {
+		t.Errorf("malformed update payload resp code: %v, want %v", got, want)
+	}
+	var respStatus struct {
+		Errors []string
+	}
+	_ = json.Unmarshal(respBody, &respStatus)
+	if diff := cmp.Diff(respStatus.Errors, []string{
+		"please specify a title",
+		"price cannot be less than 0",
+	}, cmpStringSplitter); diff != "" {
+		t.Errorf("incorrect errors reported, diff: %v", diff)
+	}
+
+	// 200 if update successful
+	tikUpdate = TicketReq{"successful update test", 0.0}
+	tikUpdateJson, _ = json.Marshal(&tikUpdate)
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tickets/%v", tikId), bytes.NewBuffer(tikUpdateJson))
+	req.Header.Set("auth-jwt", testUserJWT)
+	router.ServeHTTP(resp, req)
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tikResp)
+	if got, want := resp.Code, http.StatusOK; got != want {
+		t.Errorf("update payload resp code: %v, want %v", got, want)
+	}
+	if diff := cmp.Diff(tikResp, TicketResp{
+		"successful update test",
+		0.0,
+		"1",
+		"0",
+	}); diff != "" {
+		t.Errorf("update payload did not yield correct response: %v", diff)
+	}
+
+	// verify updated ticket is actually persisted
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/tickets/%v", tikId), nil)
+	req.Header.Set("auth-jwt", testUserJWT)
+	router.ServeHTTP(resp, req)
+	respBody, _ = ioutil.ReadAll(resp.Body)
+	_ = json.Unmarshal(respBody, &tikResp)
+	if diff := cmp.Diff(tikResp, TicketResp{
+		"successful update test",
+		0.0,
+		"1",
+		"0",
+	}); diff != "" {
+		t.Errorf("ticket update did not persist: %v", diff)
+	}
+
 }
 
 // to test:
