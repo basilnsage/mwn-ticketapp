@@ -186,15 +186,7 @@ func serveCreate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	uid := userClaims.Id
 
 	// validate fields
-	var validationErrors []string
-	if tik.Title == "" {
-		validationErrors = append(validationErrors, "please specify a title")
-	}
-	if tik.Price < 0.0 {
-		validationErrors = append(validationErrors, "price cannot be less than 0")
-	}
-
-	if len(validationErrors) > 0 {
+	if ok, validationErrors := tik.isValid(); !ok {
 		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
 		c.JSON(http.StatusBadRequest, ErrorResp{validationErrors})
 		return
@@ -263,11 +255,11 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	}
 
 	// read ticket from DB without error
-	// make sure ticket owner matches downstream user id
+	// make sure ticket owner matches originating user id
 	userJWT := c.GetHeader("auth-jwt")
 	if userJWT == "" {
 		ErrorLogger.Print("no auth-jwt header found! this should never happen")
-		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
+		c.JSON(http.StatusUnauthorized, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
@@ -291,14 +283,7 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 	}
 
 	// validate fields
-	var validationErrors []string
-	if tikReq.Title == "" {
-		validationErrors = append(validationErrors, "please specify a title")
-	}
-	if tikReq.Price < 0.0 {
-		validationErrors = append(validationErrors, "price cannot be less than 0")
-	}
-	if len(validationErrors) > 0 {
+	if ok, validationErrors := tikReq.isValid(); !ok {
 		WarningLogger.Printf("ticket validation failed, err: %v", strings.Join(validationErrors, " | "))
 		c.JSON(http.StatusBadRequest, ErrorResp{validationErrors})
 		return
@@ -322,4 +307,20 @@ func serveUpdate(c *gin.Context, crud MongoCollection, v *middleware.JWTValidato
 		Owner: tik.Owner,
 		Id:    tik.Id,
 	})
+}
+
+// helper and utility functions
+
+// checks a TicketReq struct to ensure all fields are non-empty and within proper bounds
+func (t TicketReq) isValid() (res bool, issues []string) {
+	res = true
+	if t.Title == "" {
+		issues = append(issues, "please specify a title")
+		res = false
+	}
+	if t.Price < 0.0 {
+		issues = append(issues, "price cannot be less than 0")
+		res = false
+	}
+	return res, issues
 }
