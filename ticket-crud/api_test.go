@@ -64,10 +64,11 @@ func (f *fakeMongoCollection) Update(id string, title string, price float64) (bo
 	return true, nil
 }
 
-func newTestInfra() (*gin.Engine, *middleware.JWTValidator, error) {
+func newTestInfra() (*apiServer, *middleware.JWTValidator, error) {
 	fakeMongo := newFakeMongoCollection()
 	gin.SetMode(gin.TestMode)
-	router, err := newRouter("password", fakeMongo)
+	r := gin.Default()
+	server, err := newApiServer("password", r, fakeMongo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,7 +77,7 @@ func newTestInfra() (*gin.Engine, *middleware.JWTValidator, error) {
 		return nil, nil, err
 	}
 
-	return router, v, nil
+	return server, v, nil
 }
 
 type test struct {
@@ -150,7 +151,7 @@ func runTest(tests []test, router *gin.Engine, t *testing.T) (err error) {
 }
 
 func TestCreate(t *testing.T) {
-	router, v, err := newTestInfra()
+	server, v, err := newTestInfra()
 	if err != nil {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
@@ -201,14 +202,14 @@ func TestCreate(t *testing.T) {
 		},
 	}
 
-	if err := runTest(tests, router, t); err != nil {
+	if err := runTest(tests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
 }
 
 // test the route directly since it is a thin wrapper around serveReadOne
 func TestReadOne(t *testing.T) {
-	router, v, err := newTestInfra()
+	server, v, err := newTestInfra()
 	if err != nil {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
@@ -248,23 +249,24 @@ func TestReadOne(t *testing.T) {
 		},
 	}
 
-	if err := runTest(tests, router, t); err != nil {
+	if err := runTest(tests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
 }
 
 func TestReadAll(t *testing.T) {
-	fakeMongo := newFakeMongoCollection()
-	gin.SetMode(gin.TestMode)
-	router, _ := newRouter("password", fakeMongo)
+	server, _, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
+	}
 
 	for i := 0; i < 3; i++ {
-		_, _ = fakeMongo.Create("testing", 1.0, "0")
+		_, _ = server.db.Create("testing", 1.0, "0")
 	}
 
 	resp := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/tickets", nil)
-	router.ServeHTTP(resp, req)
+	server.router.ServeHTTP(resp, req)
 
 	var tickets struct {
 		Tickets []TicketResp
@@ -281,7 +283,7 @@ func TestReadAll(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	router, v, err := newTestInfra()
+	server, v, err := newTestInfra()
 	if err != nil {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
@@ -342,7 +344,7 @@ func TestUpdate(t *testing.T) {
 		},
 	}
 
-	if err := runTest(tests, router, t); err != nil {
+	if err := runTest(tests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
 }

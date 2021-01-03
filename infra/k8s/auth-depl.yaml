@@ -21,6 +21,7 @@ spec:
           resources:
             limits:
               memory: 256Mi
+              cpu: "500m"
           env:
             - name: JWT_SIGN_KEY
               valueFrom:

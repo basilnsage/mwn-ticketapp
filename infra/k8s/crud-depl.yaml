@@ -25,6 +25,8 @@ spec:
           env:
             - name: MONGO_CONN_STR
               value: mongodb://crud-mongo-svc:27017
+            - name: NATS_CONN_STR
+              value: http://nats-svc:4222
             - name: JWT_SIGN_KEY
               valueFrom:
                 secretKeyRef:
