@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -64,11 +65,16 @@ func (f *fakeMongoCollection) Update(id string, title string, price float64) (bo
 	return true, nil
 }
 
+func (f *fakeMongoCollection) Close(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 func newTestInfra() (*apiServer, *middleware.JWTValidator, error) {
 	fakeMongo := newFakeMongoCollection()
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
-	server, err := newApiServer("password", r, fakeMongo)
+	server, err := newApiServer("password", r, fakeMongo, nil)
 	if err != nil {
 		return nil, nil, err
 	}

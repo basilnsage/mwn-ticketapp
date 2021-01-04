@@ -15,6 +15,11 @@ type CRUD interface {
 	ReadOne(string) (*TicketResp, error)
 	ReadAll() ([]TicketResp, error)
 	Update(string, string, float64) (bool, error)
+	Closer
+}
+
+type Closer interface {
+	Close(context.Context) error
 }
 
 type MongoColl struct {
@@ -107,4 +112,12 @@ func (c *MongoColl) Update(id string, title string, price float64) (bool, error)
 	}
 
 	return true, nil
+}
+
+func (c *MongoColl) Close(ctx context.Context) error {
+	client := c.coll.Database().Client()
+	if err := client.Disconnect(ctx); err != nil {
+		return err
+	}
+	return nil
 }
