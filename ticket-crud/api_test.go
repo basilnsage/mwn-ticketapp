@@ -12,8 +12,11 @@ import (
 	"testing"
 
 	"github.com/basilnsage/mwn-ticketapp/middleware"
+	"github.com/basilnsage/mwn-ticketapp/ticket-crud/events"
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-cmp/cmp"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/stan.go"
 )
 
 type fakeMongoCollection struct {
@@ -70,11 +73,50 @@ func (f *fakeMongoCollection) Close(ctx context.Context) error {
 	return nil
 }
 
+type fakeNatsConn struct {
+	messages map[string][][]byte
+}
+
+func newFakeNatsConn() *fakeNatsConn {
+	return &fakeNatsConn{
+		make(map[string][][]byte),
+	}
+}
+
+func (f *fakeNatsConn) Publish(subj string, data []byte) error {
+	f.messages[subj] = append(f.messages[subj], data)
+	return nil
+}
+
+func (f *fakeNatsConn) PublishAsync(subj string, data []byte, ah stan.AckHandler) (string, error) {
+	_, _, _ = subj, data, ah
+	return "", errors.New("not implemented")
+}
+
+func (f *fakeNatsConn) Subscribe(subj string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
+	_, _, _ = subj, cb, opts
+	return nil, errors.New("not implemented")
+}
+
+func (f *fakeNatsConn) QueueSubscribe(subj, qgroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
+	_, _, _, _ = subj, qgroup, cb, opts
+	return nil, errors.New("not implemented")
+}
+
+func (f *fakeNatsConn) Close() error {
+	return nil
+}
+
+func (f *fakeNatsConn) NatsConn() *nats.Conn {
+	return nil
+}
+
 func newTestInfra() (*apiServer, *middleware.JWTValidator, error) {
 	fakeMongo := newFakeMongoCollection()
+	fakeStan := newFakeNatsConn()
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
-	server, err := newApiServer("password", r, fakeMongo, nil)
+	server, err := newApiServer("password", r, fakeMongo, fakeStan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,6 +204,9 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
+	fakeStan := newFakeNatsConn()
+	server.eBus = fakeStan
+
 	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
 	badUserJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.f9FeG_FD2vOW6sGQwGxCoGYNIZv1P_Sb7WBgjq99KOs"
 
@@ -211,6 +256,18 @@ func TestCreate(t *testing.T) {
 	if err := runTest(tests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
+
+	t.Run("create ticket event publish", func(currTest *testing.T) {
+		// check that a ticket was published to our fake NATS client
+		pbBytes := fakeStan.messages[events.Subject{}.CreateTicket()][0]
+		resp, err := ticketRespFromProto(pbBytes)
+		if err != nil {
+			currTest.Fatal(err)
+		}
+		if diff := cmp.Diff(*resp, TicketResp{"for testing", 0.0, "1", "0"}); diff != "" {
+			currTest.Fatalf("bad resp ticket: %v", diff)
+		}
+	})
 }
 
 // test the route directly since it is a thin wrapper around serveReadOne
@@ -297,6 +354,9 @@ func TestUpdate(t *testing.T) {
 	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
 	badUserJWT, _ := middleware.NewUserClaims("bar@foo.com", "2").Tokenize(v)
 
+	fakeStan := newFakeNatsConn()
+	server.eBus = fakeStan
+
 	tests := []test{
 		{
 			"create test ticket",
@@ -353,4 +413,16 @@ func TestUpdate(t *testing.T) {
 	if err := runTest(tests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
+
+	t.Run("update ticket event publish", func(currTest *testing.T) {
+		// check that a ticket was published to our fake NATS client
+		pbBytes := fakeStan.messages[events.Subject{}.UpdateTicket()][0]
+		resp, err := ticketRespFromProto(pbBytes)
+		if err != nil {
+			currTest.Fatal(err)
+		}
+		if diff := cmp.Diff(*resp, TicketResp{"this should be new", 10.0, "1", "0"}); diff != "" {
+			currTest.Fatalf("bad resp ticket: %v", diff)
+		}
+	})
 }

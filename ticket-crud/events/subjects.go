@@ -2,7 +2,7 @@ package events
 
 const (
 	createTicketSubj = "ticket:created"
-	updateTicketSubj = "ticket:created"
+	updateTicketSubj = "ticket:updated"
 )
 
 type Subject struct{}

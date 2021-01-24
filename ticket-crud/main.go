@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -58,26 +56,40 @@ func gracefulShutdown(m Closer, n stan.Conn, h *http.Server) (errs []string) {
 	return errs
 }
 
+type mainConfig map[string]string
+
+func genMainConfig() (mainConfig, []string) {
+	var missingEnvs []string
+	conf := mainConfig{}
+	envToErrString := map[string]string{
+		"MONGO_CONN_STR":  "missing mongo connection: MONGO_CONN_STR",
+		"JWT_SIGN_KEY":    "missing JWT HS256 signing key: JWT_SIGN_KEY",
+		"NATS_CLUSTER_ID": "missing NATS cluster ID: NATS_CLUSTER_ID",
+		"NATS_CLIENT_ID":  "missing NATS client ID: NATS_CLIENT_ID",
+		"NATS_CONN_STR":   "missing NATS connection string: NATS_CONN_STR",
+	}
+	for key, errStr := range envToErrString {
+		if val, ok := os.LookupEnv(key); !ok {
+			conf[key] = val
+		} else {
+			missingEnvs = append(missingEnvs, errStr)
+		}
+	}
+	return conf, missingEnvs
+}
+
 func main() {
 	// parse environment variables for startup info
-	dbConnStr, ok := os.LookupEnv("MONGO_CONN_STR")
-	if !ok {
-		ErrorLogger.Print("missing mongo connection environment variable: MONGO_CONN_STR")
-		os.Exit(1)
-	}
-	natsConnStr, ok := os.LookupEnv("NATS_CONN_STR")
-	if !ok {
-		ErrorLogger.Printf("missing NATS connection string environment variable: NATS_CONN_STR")
-		os.Exit(1)
-	}
-	jwtKey, ok := os.LookupEnv("JWT_SIGN_KEY")
-	if !ok {
-		ErrorLogger.Print("missing JWT HS256 signing key: JWT_SIGN_KEY")
+	conf, missingEnvs := genMainConfig()
+	if len(missingEnvs) > 0 {
+		for _, errStr := range missingEnvs {
+			ErrorLogger.Print(errStr)
+		}
 		os.Exit(1)
 	}
 
 	// init MongoDB connection
-	mongoCRUD, err := newCrud(dbTimeout, dbConnStr, dbName, collName)
+	mongoCRUD, err := newCrud(dbTimeout, conf["MONGO_CONN_STR"], dbName, collName)
 	if err != nil {
 		ErrorLogger.Printf("unable to create DB crud wrapper: %v", err)
 		os.Exit(1)
@@ -85,7 +97,7 @@ func main() {
 	InfoLogger.Print("able to connect to MongoDB")
 
 	// init NATS Streaming Server connection
-	natsClient, err := stan.Connect("ticketing", "abc123" + strconv.Itoa(rand.Int()), stan.NatsURL(natsConnStr))
+	natsClient, err := stan.Connect(conf["NATS_CLUSTER_ID"], conf["NATS_CLIENT_ID"], stan.NatsURL(conf["NATS_CONN_STR"]))
 	if err != nil {
 		ErrorLogger.Printf("unable to connect to NATS Streaming Server: %v", err)
 		os.Exit(1)
@@ -101,15 +113,15 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	//router, err := newRouter(jwtKey, crud)
-	server, err := newApiServer(jwtKey, r, mongoCRUD, natsClient)
+	server, err := newApiServer(conf["JWT_SIGN_KEY"], r, mongoCRUD, natsClient)
 	if err != nil {
 		ErrorLogger.Printf("could not create new API server")
 		os.Exit(1)
 	}
 	// start HTTP server and set the gin router as the server handler
 	httpServer := &http.Server{
-			Addr: ":4000",
-			Handler: server.router,
+		Addr:    ":4000",
+		Handler: server.router,
 	}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

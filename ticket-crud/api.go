@@ -106,31 +106,22 @@ func (a *apiServer) serveCreate(c *gin.Context, v *middleware.JWTValidator) {
 		return
 	}
 
-	// publish new ticket to event bus
-	createEvent, err := proto.Marshal(&events.CreateUpdateTicket{
+	resp := TicketResp{
 		Title: tik.Title,
 		Price: tik.Price,
 		Owner: uid,
 		Id:    tikId,
-	})
-	if err != nil {
-		ErrorLogger.Printf("failed to marshal create ticket event protobuf: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
-		return
 	}
-	if err := a.eBus.Publish(events.Subject{}.CreateTicket(), createEvent); err != nil {
-		ErrorLogger.Printf("unable to publish ticket to event bus: %v", err)
+
+	// publish new ticket to event bus
+	if err := resp.publish(a.eBus, events.Subject{}.CreateTicket()); err != nil {
+		ErrorLogger.Printf("unable to publish create ticket event: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
 	}
 
 	// return object ID, title, price
-	c.JSON(http.StatusCreated, TicketResp{
-		Title: tik.Title,
-		Price: tik.Price,
-		Owner: uid,
-		Id:    tikId,
-	})
+	c.JSON(http.StatusCreated, resp)
 	InfoLogger.Printf("new ticket saved with id: %v", tikId)
 }
 
@@ -225,13 +216,19 @@ func (a *apiServer) serveUpdate(c *gin.Context, v *middleware.JWTValidator) {
 		return
 	}
 
-	c.JSON(http.StatusOK, TicketResp{
+	resp := TicketResp{
 		Title: tikReq.Title,
 		Price: tikReq.Price,
 		Owner: tik.Owner,
 		Id:    tik.Id,
-	})
+	}
+	if err := resp.publish(a.eBus, events.Subject{}.UpdateTicket()); err != nil {
+		ErrorLogger.Printf("unable to publish update ticket event: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
+		return
+	}
 
+	c.JSON(http.StatusOK, resp)
 }
 
 type TicketReq struct {
@@ -258,6 +255,35 @@ type TicketResp struct {
 	Price float64
 	Owner string
 	Id    string `bson:"_id"`
+}
+
+func ticketRespFromProto(data []byte) (*TicketResp, error) {
+	var resp events.CreateUpdateTicket
+	if err := proto.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	return &TicketResp{
+		resp.Title,
+		resp.Price,
+		resp.Owner,
+		resp.Id,
+	}, nil
+}
+
+func (t TicketResp) publish(stan stan.Conn, subj string) error {
+	createEvent, err := proto.Marshal(&events.CreateUpdateTicket{
+		Title: t.Title,
+		Price: t.Price,
+		Owner: t.Owner,
+		Id:    t.Id,
+	})
+	if err != nil {
+		return err
+	}
+	if err := stan.Publish(subj, createEvent); err != nil {
+		return err
+	}
+	return nil
 }
 
 type ErrorResp struct {
