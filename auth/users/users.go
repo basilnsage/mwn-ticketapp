@@ -51,7 +51,7 @@ type User struct {
 	password string `validate:"required,passwd,strnonblank"`
 	// issues with reintroducing Hash
 	// how to mock? new hash generated every time the password is run through bcrypt
-	uid      interface{}
+	Uid      interface{}
 }
 
 func validatePassword(password string) error {
@@ -85,51 +85,12 @@ func NewUser(email string, password string, hash []byte) (*User, error) {
 		Email: email,
 		Hash: hash,
 		password: password,
-		uid: nil,
+		Uid: nil,
 	}, nil
 }
 
-//func NewUser(email string, password string) (*User, error) {
-//	return &User{
-//		email,
-//		password,
-//		hash,
-		//nil,
-	//}, nil
-//}
-
-//func hashPass(pass string) ([]byte, error) {
-//	return bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
-//}
-
-//func (u User) Hash() ([]byte, error) {
-//	hash, err := hashPass(u.Password)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return hash, nil
-//}
-
-//func (u User) Validate(exempt map[string]interface{}) error {
-//	err := v.Struct(u)
-//	if err != nil {
-//		invalidTags := make([]string, 0)
-//		for _, err := range err.(validator.ValidationErrors) {
-//			tag := err.Tag()
-//			if _, ok := exempt[tag]; !ok {
-//				invalidTags = append(invalidTags, err.Tag())
-//			}
-//		}
-//		if len(invalidTags) > 0 {
-//			invalidFieldString := fmt.Sprintf("unable to validate these tags: %v", strings.Join(invalidTags, ","))
-//			return errors.New(invalidFieldString)
-//		}
-//	}
-//	return nil
-//}
-
 func (u *User) SetUID(uid interface{}){
-	u.uid = uid
+	u.Uid = uid
 }
 
 func (u User) Exists(ctx context.Context, crud CRUD) (bool, error) {
@@ -168,10 +129,19 @@ func (u User) DoesPassMatch(ctx context.Context, crud CRUD) (bool, error) {
 	return true, nil
 }
 
-func (u User) CreateSessionToken(signer Signer) (string, error) {
+func (u User) CreateSessionToken(ctx context.Context, c CRUD, signer Signer) (string, error) {
+	if u.Uid == nil {
+		res, err := c.Read(ctx, u)
+		if err != nil {
+			return "", fmt.Errorf("could not fetch user from DB: %v", err)
+		}
+		// WARNING: because this is a value receiver this will NOT update the UID of the underlying user
+		u.Uid = res[0].Uid
+	}
+
 	claims := map[string]interface{}{
 		"email": u.Email,
-		"id": u.uid,
+		"id": u.Uid,
 	}
 	token, err := signer.Sign(claims)
 	if err != nil {

@@ -70,7 +70,7 @@ func main() {
 	UseUserRoutes(router, conf)
 
 	// expose prometheus metrics
-	router.GET("/metrics", metricReg.DefaultHandler)
+	router.GET("/auth/metrics", metricReg.DefaultHandler)
 
 	if err := router.Run(":4000"); err != nil {
 		log.Fatalf("unable to run auth service: %v", err)

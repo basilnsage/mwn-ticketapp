@@ -2,26 +2,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: auth-depl
+  name: crud-depl
 spec:
   replicas: 1
   selector:
     matchLabels:
-      service: auth
+      service: crud
   template:
     metadata:
       labels:
         app: tickets
-        service: auth
+        service: crud
     spec:
       containers:
-        - name: auth
-          image: basilnsage/mwn-ticketapp.auth:latest
+        - name: crud
+          image: basilnsage/mwn-ticketapp.crud:latest
           imagePullPolicy: Never
           resources:
             limits:
               memory: 256Mi
+              cpu: 500m 
           env:
+            - name: MONGO_CONN_STR
+              value: mongodb://crud-mongo-svc:27017
             - name: JWT_SIGN_KEY
               valueFrom:
                 secretKeyRef:
@@ -31,28 +34,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: auth-svc
+  name: crud-svc
   labels:
-    service: auth
+    service: crud
 spec:
   selector:
-    service: auth
+    service: crud
   ports:
-    - name: auth
+    - name: crud
       protocol: TCP
       port: 4000
       targetPort: 4000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: auth-np
-spec:
-  selector:
-    service: auth
-  ports:
-    - name: auth-np
-      port: 4000
-      targetPort: 4000
-  type: NodePort
 ...

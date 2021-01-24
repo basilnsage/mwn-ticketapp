@@ -45,7 +45,7 @@ func signupUserFlow(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, s
 	}
 
 	// now create a JWT for the user and return this to the client
-	userJwt, err := newUser.CreateSessionToken(signer)
+	userJwt, err := newUser.CreateSessionToken(ctx, crud, signer)
 	if err != nil {
 		return err, e.NewBaseError(http.StatusBadRequest, "signup failed")
 	}

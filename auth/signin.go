@@ -39,7 +39,7 @@ func signin(ctx context.Context, ginCtx *gin.Context, crud users.CRUD, signer us
 		return errors.New("user password does not match")
 	}
 
-	userJWT, err := newUser.CreateSessionToken(signer)
+	userJWT, err := newUser.CreateSessionToken(ctx, crud, signer)
 	if err != nil {
 		return err
 	}

@@ -18,17 +18,6 @@ func TestSignupFlow(t *testing.T) {
 	signer := new(mockSigner)
 	crud := new(mockCRUD)
 	ctx := context.Background()
-	//user, err := users.NewUser(email, pass, passHash)
-	//if err != nil {
-	//	t.Fatalf("unable to create new user: %v", err)
-	//}
-	//userBytes, err := proto.Marshal(&protos.SignIn{
-	//	Username: "foo@example.com",
-	//	Password: "password",
-	//})
-	//if err != nil {
-	//	t.Fatalf("unable to marshal user proto: %v", err)
-	//}
 
 	crud.On("Read", ctx, mock.MatchedBy(checkTestUser)).Return(make([]users.User, 0), nil)
 	crud.On("Write", ctx, mock.MatchedBy(checkTestUser)).Return(uid, nil)
