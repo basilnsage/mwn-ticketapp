@@ -1,0 +1,56 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-depl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: orders
+  template:
+    metadata:
+      labels:
+        app: tickets
+        service: orders
+    spec:
+      containers:
+        - name: orders
+          image: basilnsage/mwn-ticketapp.orders:latest
+          imagePullPolicy: Never
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: 500m 
+          env:
+            - name: MONGO_CONN_STR
+              value: mongodb://orders-mongo-svc:27017
+            - name: NATS_CLUSTER_ID
+              value: ticketing
+            - name: NATS_CLIENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NATS_CONN_STR
+              value: http://nats-svc:4222
+            - name: JWT_SIGN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: sign-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-svc
+  labels:
+    service: orders
+spec:
+  selector:
+    service: orders
+  ports:
+    - name: orders
+      protocol: TCP
+      port: 4000
+      targetPort: 4000
+...

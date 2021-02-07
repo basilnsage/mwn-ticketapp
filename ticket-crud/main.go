@@ -112,7 +112,6 @@ func main() {
 	// create gin router and bind handlers/routes to it
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	//router, err := newRouter(jwtKey, crud)
 	server, err := newApiServer(conf["JWT_SIGN_KEY"], r, mongoCRUD, natsClient)
 	if err != nil {
 		ErrorLogger.Printf("could not create new API server")
