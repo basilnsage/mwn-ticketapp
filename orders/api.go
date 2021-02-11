@@ -82,7 +82,7 @@ func (a *apiServer) postOrder(c *gin.Context) {
 	// has the ticket been reserved?
 	// find an order, whose status != reserved, that references the ticket
 	//orders, err := a.oc.search(1, ticketId, Created, AwaitingPayment, Completed)
-	orders, err := a.oc.searchTest(1, []string{ticketId}, []string{}, []orderStatus{Created, AwaitingPayment, Completed})
+	orders, err := a.oc.search(1, []string{ticketId}, []string{}, []orderStatus{Created, AwaitingPayment, Completed})
 	if err != nil {
 		ErrorLogger.Printf("reserved order search failed: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
@@ -154,10 +154,32 @@ func (a *apiServer) getAllOrders(c *gin.Context) {
 	uid := userClaims.Id
 
 	// search for all orders belonging to this user
-	//orders, err := a.oc.search(
+	orders, err := a.oc.search(50, nil, []string{uid}, nil)
+	if err != nil {
+		ErrorLogger.Printf("error search for users orders: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+
 	// for each order, fetch the ticket and combine the two into the response
+	resp := make([]OrderResp, 0)
+	for _, order := range orders {
+		tid := order.TicketId
+		ticket, err := a.tc.read(tid)
+		if err != nil {
+			ErrorLogger.Printf("error reading ticket, id: %v, error: %v", tid, err)
+			continue
+		}
+		resp = append(resp, OrderResp{
+			order.Status,
+			order.ExpiresAt,
+			*ticket,
+			order.Id,
+		})
+	}
 
 	// send the response
+	c.JSON(http.StatusOK, resp)
 }
 
 func (a *apiServer) putOrder(c *gin.Context) {

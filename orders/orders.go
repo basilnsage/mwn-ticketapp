@@ -34,10 +34,10 @@ type OrderResp struct {
 type ordersCRUD interface {
 	create(Order) (string, error)
 	read(string) (*Order, error)
-	search(uint, string, ...orderStatus) ([]Order, error)
-	searchTest(int64, []string, []string, []orderStatus) ([]Order, error)
+	search(int64, []string, []string, []orderStatus) ([]Order, error)
 	update(string, Order) (bool, error)
 }
+
 //func (o ordersCollection) searchBy(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
 
 type ordersCollection struct {
@@ -68,7 +68,7 @@ func (o ordersCollection) read(id string) (*Order, error) {
 	return nil, nil
 }
 
-func (o ordersCollection) searchTest(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
+func (o ordersCollection) search(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
 	filter := bson.M{}
 
 	if len(ticketIds) == 1 {
@@ -97,36 +97,6 @@ func (o ordersCollection) searchTest(limit int64, ticketIds, userIds []string, s
 	defer cancel()
 
 	cursor, err := o.collection.Find(ctx, filter, &options.FindOptions{Limit: &limit})
-	if err != nil {
-		return nil, err
-	}
-
-	var orders []Order
-	if err := cursor.All(ctx, &orders); err != nil {
-		return nil, err
-	}
-
-	return orders, nil
-}
-
-func (o ordersCollection) search(limit uint, ticketId string, status ...orderStatus) ([]Order, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
-	defer cancel()
-
-	limitInt := int64(limit)
-	findOpts := options.FindOptions{Limit: &limitInt}
-	var statuses []string
-	for _, s := range status {
-		statuses = append(statuses, s.String())
-	}
-	filter := bson.M{
-		"ticketId": ticketId,
-		"status": bson.M{
-			"$in": statuses,
-		},
-	}
-
-	cursor, err := o.collection.Find(ctx, filter, &findOpts)
 	if err != nil {
 		return nil, err
 	}

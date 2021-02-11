@@ -38,8 +38,8 @@ func (f *fakeTicketsCollection) read(id string) (*Ticket, error) {
 
 func (f *fakeTicketsCollection) createWrapper(title string, price float64, version uint) Ticket {
 	ticket := Ticket{
-		Title: title,
-		Price: price,
+		Title:   title,
+		Price:   price,
 		Version: version,
 	}
 	tid, _ := f.create(ticket)

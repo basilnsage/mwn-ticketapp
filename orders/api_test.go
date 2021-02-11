@@ -257,6 +257,10 @@ func TestGetAllOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
+	user3JWT, err := middleware.NewUserClaims("user3@example.com", "3").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
 
 	user1Ticket1 := fakeTC.createWrapper("user1 ticket1", 1.0, 1)
 	user2Ticket1 := fakeTC.createWrapper("user2 ticket1", 2.0, 2)
@@ -305,6 +309,16 @@ func TestGetAllOrders(t *testing.T) {
 					user2Order2.Id,
 				},
 			},
+			nil,
+		},
+		{
+			"get all orders no order",
+			http.MethodGet,
+			"/api/orders",
+			nil,
+			map[string]string{"auth-jwt": user3JWT},
+			http.StatusOK,
+			[]OrderResp{},
 			nil,
 		},
 	}

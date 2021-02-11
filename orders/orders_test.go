@@ -38,7 +38,7 @@ func (f *fakeOrdersCollection) read(id string) (*Order, error) {
 	return &order, nil
 }
 
-func (f *fakeOrdersCollection) searchTest(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
+func (f *fakeOrdersCollection) search(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
 	ticketMap := make(map[string]struct{})
 	for _, tid := range ticketIds {
 		ticketMap[tid] = struct{}{}
@@ -76,26 +76,6 @@ func (f *fakeOrdersCollection) searchTest(limit int64, ticketIds, userIds []stri
 	return res, nil
 }
 
-func (f *fakeOrdersCollection) search(limit uint, ticketId string, status ...orderStatus) ([]Order, error) {
-	statuses := make(map[string]struct{})
-	for _, s := range status {
-		statuses[s.String()] = struct{}{}
-	}
-
-	var res []Order
-	for _, value := range f.orders {
-		if uint(len(res)) > limit {
-			break
-		}
-		if value.TicketId == ticketId {
-			if _, ok := statuses[value.Status.String()]; ok {
-				res = append(res, value)
-			}
-		}
-	}
-	return res, nil
-}
-
 func (f *fakeOrdersCollection) update(id string, order Order) (bool, error) {
 	if order.Id != "" && order.Id != id {
 		return false, errors.New("provided order does not match provided order ID")
@@ -110,12 +90,12 @@ func (f *fakeOrdersCollection) update(id string, order Order) (bool, error) {
 // a wrapper around the create method
 func (f *fakeOrdersCollection) createWrapper(uid, tid string, status orderStatus) Order {
 	order := Order{
-		UserId: uid,
-		Status: status,
+		UserId:    uid,
+		Status:    status,
 		ExpiresAt: allBalls,
-		TicketId: tid,
+		TicketId:  tid,
 	}
-	oid, _  := f.create(order)
+	oid, _ := f.create(order)
 	order.Id = oid
 	return order
 }
