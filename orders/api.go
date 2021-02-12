@@ -54,7 +54,7 @@ func (a *apiServer) bindRoutes() error {
 	ticketRoutes.POST("/create", userValidationMiddleware, a.postOrder)
 	ticketRoutes.GET("", userValidationMiddleware, a.getAllOrders)
 	ticketRoutes.GET("/:id", userValidationMiddleware, a.getOrder)
-	ticketRoutes.PUT("/:id", userValidationMiddleware, a.putOrder)
+	ticketRoutes.PATCH("/:id", userValidationMiddleware, a.cancelOrder)
 
 	return nil
 }
@@ -81,7 +81,6 @@ func (a *apiServer) postOrder(c *gin.Context) {
 
 	// has the ticket been reserved?
 	// find an order, whose status != reserved, that references the ticket
-	//orders, err := a.oc.search(1, ticketId, Created, AwaitingPayment, Completed)
 	orders, err := a.oc.search(1, []string{ticketId}, []string{}, []orderStatus{Created, AwaitingPayment, Completed})
 	if err != nil {
 		ErrorLogger.Printf("reserved order search failed: %v", err)
@@ -140,7 +139,52 @@ func (a *apiServer) postOrder(c *gin.Context) {
 }
 
 func (a *apiServer) getOrder(c *gin.Context) {
+	// get user id from auth-jwt header
+	var userClaims middleware.UserClaims
+	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
+		c.Status(http.StatusForbidden)
+		return
+	}
+	uid := userClaims.Id
 
+	// fetch order with ID from URI param
+	oid := c.Param("id")
+	// if no oid (not sure how this would happen...)
+	if oid == "" {
+		c.JSON(http.StatusBadRequest, ErrorResp{[]string{"no order id found"}})
+		return
+	}
+	order, err := a.oc.read(oid)
+	if err != nil {
+		ErrorLogger.Printf("unable to fetch single order: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, ErrorResp{[]string{"no order found"}})
+		return
+	}
+	if order.UserId != uid {
+		c.JSON(http.StatusUnauthorized, ErrorResp{[]string{"unauthorized"}})
+		return
+	}
+
+	// fetch corresponding ticket
+	ticket, err := a.tc.read(order.TicketId)
+	if err != nil {
+		ErrorLogger.Printf("failed to read ticket from DB: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+
+	// return OrderResp if order exists
+	c.JSON(http.StatusOK, OrderResp{
+		order.Status,
+		order.ExpiresAt,
+		*ticket,
+		order.Id,
+	})
 }
 
 func (a *apiServer) getAllOrders(c *gin.Context) {
@@ -182,8 +226,56 @@ func (a *apiServer) getAllOrders(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func (a *apiServer) putOrder(c *gin.Context) {
+func (a *apiServer) cancelOrder(c *gin.Context) {
+	// get user id from jwt header
+	var userClaims middleware.UserClaims
+	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
+		c.Status(http.StatusForbidden)
+		return
+	}
+	uid := userClaims.Id
 
+	// check if the order exists
+	oid := c.Param("id")
+	if oid == "" {
+		ErrorLogger.Printf("no order id found, this should not happen, id: %v", oid)
+		c.JSON(http.StatusBadRequest, ErrorResp{[]string{"please specify an order id"}})
+		return
+	}
+	order, err := a.oc.read(oid)
+	if err != nil {
+		ErrorLogger.Printf("unable to fetch single order: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, ErrorResp{[]string{"order not found"}})
+		return
+	}
+
+	// check if the user owns the order
+	if order.UserId != uid {
+		c.JSON(http.StatusUnauthorized, ErrorResp{[]string{"unauthorized"}})
+		return
+	}
+
+	// update status
+	order.Status = Cancelled
+	ok, err := a.oc.update(oid, *order)
+	if err != nil {
+		ErrorLogger.Printf("could not update order: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+	if !ok {
+		ErrorLogger.Printf("order not found during update, this should not happen, id: %v", oid)
+		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
+		return
+	}
+
+	// send response
+	c.Status(http.StatusNoContent)
 }
 
 //func (a *apiServer) serveCreate(c *gin.Context, v *middleware.JWTValidator) {

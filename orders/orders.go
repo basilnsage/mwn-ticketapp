@@ -61,11 +61,31 @@ func (o ordersCollection) create(order Order) (string, error) {
 		return "", err
 	}
 
-	return res.InsertedID.(primitive.ObjectID).String(), nil
+	return res.InsertedID.(primitive.ObjectID).Hex(), nil
 }
 
 func (o ordersCollection) read(id string) (*Order, error) {
-	return nil, nil
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
+
+	mongoId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+
+	res := o.collection.FindOne(ctx, bson.M{"_id": mongoId})
+	if res.Err() != nil && res.Err() != mongo.ErrNoDocuments {
+		return nil, err
+	} else if res.Err() == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+
+	var order Order
+	if err := res.Decode(&order); err != nil {
+		return nil, err
+	}
+
+	return &order, nil
 }
 
 func (o ordersCollection) search(limit int64, ticketIds, userIds []string, statuses []orderStatus) ([]Order, error) {
@@ -90,7 +110,7 @@ func (o ordersCollection) search(limit int64, ticketIds, userIds []string, statu
 		for _, s := range statuses {
 			statusStrings = append(statusStrings, s.String())
 		}
-		filter["status"] = statusStrings
+		filter["status"] = bson.M{"$in": statusStrings}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
@@ -109,7 +129,25 @@ func (o ordersCollection) search(limit int64, ticketIds, userIds []string, statu
 	return orders, nil
 }
 
+// can only update statuses for now
 func (o ordersCollection) update(id string, order Order) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
+
+	mongoId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return false, err
+	}
+
+	filter := bson.M{"_id": mongoId}
+	update := bson.M{"$set": bson.M{"status": order.Status.String()}}
+	res, err := o.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return false, err
+	}
+	if res.ModifiedCount > 0 {
+		return true, nil
+	}
 	return false, nil
 }
 

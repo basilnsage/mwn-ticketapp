@@ -53,15 +53,18 @@ func (f *fakeNatsConn) NatsConn() *nats.Conn {
 	return nil
 }
 
-func newTestInfra(tc ticketsCRUD, oc ordersCRUD, fs stan.Conn) (*apiServer, error) {
+func newTestInfra() (*apiServer, *fakeTicketsCollection, *fakeOrdersCollection, *fakeNatsConn, error) {
+	fakeTC := newFakeTicketsCollection()
+	fakeOC := newFakeOrdersCollection()
+	fakeStan := newFakeNatsConn()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	server, err := newApiServer("password", 0, r, tc, oc, fs)
+	server, err := newApiServer("password", 0, r, fakeTC, fakeOC, fakeStan)
 	if err != nil {
-		return nil, err
+		return nil, fakeTC, fakeOC, fakeStan, nil
 	}
 
-	return server, nil
+	return server, fakeTC, fakeOC, fakeStan, nil
 }
 
 type test struct {
@@ -137,8 +140,8 @@ func runTest(tests []test, router *gin.Engine, t *testing.T) (err error) {
 				if err := json.Unmarshal(respBytes, &respBody); err != nil {
 					currTest.Fatalf("json.Unmarshal: %v", err)
 				}
-				if diff := cmp.Diff(respBody, *test.expectedErr); diff != "" {
-					currTest.Fatalf("unexpected error: %v", diff)
+				if diff := cmp.Diff(*test.expectedErr, respBody); diff != "" {
+					currTest.Fatalf("unexpected error: (-want, +got)\n%v", diff)
 				}
 			}
 		})
@@ -147,10 +150,7 @@ func runTest(tests []test, router *gin.Engine, t *testing.T) (err error) {
 }
 
 func TestPostOrder(t *testing.T) {
-	fakeTC := newFakeTicketsCollection()
-	fakeOC := newFakeOrdersCollection()
-	fakeStan := newFakeNatsConn()
-	server, err := newTestInfra(fakeTC, fakeOC, fakeStan)
+	server, fakeTC, fakeOC, _, err := newTestInfra()
 	if err != nil {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
@@ -160,25 +160,9 @@ func TestPostOrder(t *testing.T) {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
 
-	reservedTicketId, _ := fakeTC.create(Ticket{
-		Title:   "i am reserved",
-		Price:   1.0,
-		Version: 0,
-	})
-	_, _ = fakeOC.create(Order{
-		UserId:    "0",
-		Status:    Created,
-		ExpiresAt: allBalls,
-		TicketId:  reservedTicketId,
-	})
-
-	availableTicket := Ticket{
-		Title:   "reserve me",
-		Price:   1.0,
-		Version: 1,
-	}
-	availableTicketId, _ := fakeTC.create(availableTicket)
-	availableTicket.Id = availableTicketId
+	reservedTicket := fakeTC.createWrapper("i am reserved", 1.0, 0)
+	_ = fakeOC.createWrapper("0", reservedTicket.Id, Created)
+	availableTicket := fakeTC.createWrapper("reserve me", 1.0, 1)
 
 	tests := []test{
 		{
@@ -205,7 +189,7 @@ func TestPostOrder(t *testing.T) {
 			"order a reserved ticket",
 			http.MethodPost,
 			"/api/orders/create",
-			OrderReq{reservedTicketId},
+			OrderReq{reservedTicket.Id},
 			map[string]string{"auth-jwt": testUserJWT},
 			http.StatusBadRequest,
 			nil,
@@ -233,18 +217,74 @@ func TestPostOrder(t *testing.T) {
 	}
 }
 
-func TestGetAllOrders(t *testing.T) {
-	// tests:
-	// have 2 users, userA and userB
-	// userA has 1 order
-	// userB has 2 orders
-	// ensure userA only gets their 1 order (with ticket)
-	// ensure userB only gets their 2 orders (with tickets)
+func TestGetAnOrder(t *testing.T) {
+	server, fakeTC, fakeOC, _, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
+	}
 
-	fakeTC := newFakeTicketsCollection()
-	fakeOC := newFakeOrdersCollection()
-	fakeStan := newFakeNatsConn()
-	server, err := newTestInfra(fakeTC, fakeOC, fakeStan)
+	user1JWT, err := middleware.NewUserClaims("user1@example.com", "1").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
+	user2JWT, err := middleware.NewUserClaims("user2@example.com", "2").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
+
+	_ = fakeTC.createWrapper("my order does not exist", 1.0, 1)
+	ticket2 := fakeTC.createWrapper("i am ordered by user1", 2.0, 2)
+	ticket3 := fakeTC.createWrapper("i am ordered by user2", 3.0, 3)
+
+	// skip order1; ticket1 should not have an order
+	order2 := fakeOC.createWrapper("1", ticket2.Id, Created)
+	order3 := fakeOC.createWrapper("2", ticket3.Id, Created)
+
+	tests := []test{
+		{
+			"get order that dne",
+			http.MethodGet,
+			"/api/orders/-1",
+			nil,
+			map[string]string{"auth-jwt": user1JWT},
+			http.StatusNotFound,
+			nil,
+			&ErrorResp{[]string{"no order found"}},
+		},
+		{
+			"get someone elses order",
+			http.MethodGet,
+			"/api/orders/" + order2.Id,
+			nil,
+			map[string]string{"auth-jwt": user2JWT},
+			http.StatusUnauthorized,
+			nil,
+			&ErrorResp{[]string{"unauthorized"}},
+		},
+		{
+			"get order that dne",
+			http.MethodGet,
+			"/api/orders/" + order3.Id,
+			nil,
+			map[string]string{"auth-jwt": user2JWT},
+			http.StatusOK,
+			OrderResp{
+				order3.Status,
+				order3.ExpiresAt,
+				ticket3,
+				order3.Id,
+			},
+			nil,
+		},
+	}
+
+	if err := runTest(tests, server.router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
+	}
+}
+
+func TestGetAllOrders(t *testing.T) {
+	server, fakeTC, fakeOC, _, err := newTestInfra()
 	if err != nil {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
@@ -328,231 +368,79 @@ func TestGetAllOrders(t *testing.T) {
 	}
 }
 
-//func TestCreate(t *testing.T) {
-//	fakeTC := newFakeTicketsCollection()
-//	fakeStan := newFakeNatsConn()
-//	server, err := newTestInfra(fakeTC, nil, fakeStan)
-//	if err != nil {
-//		t.Fatalf("unable to complete pre-test tasks: %v", err)
-//	}
-//
-//
-//	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
-//	badUserJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImZvb0BiYXIuY29tIiwiaWQiOjF9.f9FeG_FD2vOW6sGQwGxCoGYNIZv1P_Sb7WBgjq99KOs"
-//
-//	tests := []test{
-//		{
-//			"create test ticket",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"for testing", 0.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusCreated,
-//			&TicketResp{"for testing", 0.0, "1", "0"},
-//			nil,
-//		},
-//		{
-//			"create ticket without jwt header",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"new test ticket", 10.0},
-//			nil,
-//			http.StatusUnauthorized,
-//			nil,
-//			&ErrorResp{[]string{"User is not signed in"}},
-//		},
-//		{
-//			"create ticket with bad jwt header",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"new test ticket", 100.0},
-//			map[string]string{"auth-jwt": badUserJWT},
-//			http.StatusUnauthorized,
-//			nil,
-//			&ErrorResp{[]string{"Unauthorized"}},
-//		},
-//		{
-//			"create ticket with bad payload",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"", -1000.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusBadRequest,
-//			nil,
-//			&ErrorResp{[]string{"please specify a title", "price cannot be less than 0"}},
-//		},
-//	}
-//
-//	if err := runTest(tests, server.router, t); err != nil {
-//		t.Fatalf("error running tests: %v", err)
-//	}
-//
-//	t.Run("create ticket event publish", func(currTest *testing.T) {
-//		// check that a ticket was published to our fake NATS client
-//		pbBytes := fakeStan.messages[events.Subject{}.CreateTicket()][0]
-//		resp, err := ticketRespFromProto(pbBytes)
-//		if err != nil {
-//			currTest.Fatal(err)
-//		}
-//		if diff := cmp.Diff(*resp, TicketResp{"for testing", 0.0, "1", "0"}); diff != "" {
-//			currTest.Fatalf("bad resp ticket: %v", diff)
-//		}
-//	})
-//}
+func TestCancelOrder(t *testing.T) {
+	server, fakeTC, fakeOC, _, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to init new server: %v", err)
+	}
 
-// test the route directly since it is a thin wrapper around serveReadOne
-//func TestReadOne(t *testing.T) {
-//	server, v, err := newTestInfra()
-//	if err != nil {
-//		t.Fatalf("unable to complete pre-test tasks: %v", err)
-//	}
-//
-//	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
-//
-//	tests := []test{
-//		{
-//			"create test ticket",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"for testing", 0.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusCreated,
-//			&TicketResp{"for testing", 0.0, "1", "0"},
-//			nil,
-//		},
-//		{
-//			"get test ticket",
-//			http.MethodGet,
-//			"/api/tickets/0",
-//			nil,
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusOK,
-//			&TicketResp{"for testing", 0.0, "1", "0"},
-//			nil,
-//		},
-//		{
-//			"get nonexistent ticket",
-//			http.MethodGet,
-//			"/api/tickets/1",
-//			nil,
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusNotFound,
-//			nil,
-//			nil,
-//		},
-//	}
-//
-//	if err := runTest(tests, server.router, t); err != nil {
-//		t.Fatalf("error running tests: %v", err)
-//	}
-//}
-//
-//func TestReadAll(t *testing.T) {
-//	server, _, err := newTestInfra()
-//	if err != nil {
-//		t.Fatalf("unable to complete pre-test tasks: %v", err)
-//	}
-//
-//	for i := 0; i < 3; i++ {
-//		_, _ = server.db.Create("testing", 1.0, "0")
-//	}
-//
-//	resp := httptest.NewRecorder()
-//	req := httptest.NewRequest("GET", "/api/tickets", nil)
-//	server.router.ServeHTTP(resp, req)
-//
-//	var tickets struct {
-//		Tickets []TicketResp
-//	}
-//	respBody, _ := ioutil.ReadAll(resp.Body)
-//	_ = json.Unmarshal(respBody, &tickets)
-//
-//	if got, want := resp.Code, http.StatusOK; got != want {
-//		t.Errorf("ReadAll bad response code: %v, want %v", got, want)
-//	}
-//	if got, want := len(tickets.Tickets), 3; got != want {
-//		t.Errorf("did not fetch correct number of tickets: %v, want %v", got, want)
-//	}
-//}
-//
-//func TestUpdate(t *testing.T) {
-//	server, v, err := newTestInfra()
-//	if err != nil {
-//		t.Fatalf("unable to complete pre-test tasks: %v", err)
-//	}
-//
-//	testUserJWT, _ := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(v)
-//	badUserJWT, _ := middleware.NewUserClaims("bar@foo.com", "2").Tokenize(v)
-//
-//	fakeStan := newFakeNatsConn()
-//	server.eBus = fakeStan
-//
-//	tests := []test{
-//		{
-//			"create test ticket",
-//			http.MethodPost,
-//			"/api/tickets/create",
-//			TicketReq{"for testing", 0.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusCreated,
-//			&TicketResp{"for testing", 0.0, "1", "0"},
-//			nil,
-//		},
-//		{
-//			"unauth update",
-//			http.MethodPut,
-//			"/api/tickets/0",
-//			TicketReq{"test update", 2.0},
-//			map[string]string{"auth-jwt": badUserJWT},
-//			http.StatusUnauthorized,
-//			nil,
-//			&ErrorResp{[]string{"Unauthorized"}},
-//		},
-//		{
-//			"malformed update",
-//			http.MethodPut,
-//			"/api/tickets/0",
-//			TicketReq{"", -1.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusBadRequest,
-//			nil,
-//			&ErrorResp{[]string{"please specify a title", "price cannot be less than 0"}},
-//		},
-//		{
-//			"successful update",
-//			http.MethodPut,
-//			"/api/tickets/0",
-//			TicketReq{"this should be new", 10.0},
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusOK,
-//			&TicketResp{"this should be new", 10.0, "1", "0"},
-//			nil,
-//		},
-//		{
-//			"verify update persisted",
-//			http.MethodGet,
-//			"/api/tickets/0",
-//			nil,
-//			map[string]string{"auth-jwt": testUserJWT},
-//			http.StatusOK,
-//			&TicketResp{"this should be new", 10.0, "1", "0"},
-//			nil,
-//		},
-//	}
-//
-//	if err := runTest(tests, server.router, t); err != nil {
-//		t.Fatalf("error running tests: %v", err)
-//	}
-//
-//	t.Run("update ticket event publish", func(currTest *testing.T) {
-//		// check that a ticket was published to our fake NATS client
-//		pbBytes := fakeStan.messages[events.Subject{}.UpdateTicket()][0]
-//		resp, err := ticketRespFromProto(pbBytes)
-//		if err != nil {
-//			currTest.Fatal(err)
-//		}
-//		if diff := cmp.Diff(*resp, TicketResp{"this should be new", 10.0, "1", "0"}); diff != "" {
-//			currTest.Fatalf("bad resp ticket: %v", diff)
-//		}
-//	})
-//}
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
+
+	user0Order := fakeOC.createWrapper("0", "0", Created)
+	user1Ticket := fakeTC.createWrapper("cancel me", 1.0, 1)
+	user1Order := fakeOC.createWrapper("1", user1Ticket.Id, Created)
+
+	// test various failure conditions as well as successful patch
+	patchTests := []test{
+		{
+			"cancel a DNE order",
+			http.MethodPatch,
+			"/api/orders/-1",
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusNotFound,
+			nil,
+			&ErrorResp{[]string{"order not found"}},
+		},
+		{
+			"cancel a different users order",
+			http.MethodPatch,
+			"/api/orders/" + user0Order.Id,
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusUnauthorized,
+			nil,
+			&ErrorResp{[]string{"unauthorized"}},
+		},
+		{
+			"cancel an order",
+			http.MethodPatch,
+			"/api/orders/" + user1Order.Id,
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusNoContent,
+			nil,
+			nil,
+		},
+	}
+
+	if err := runTest(patchTests, server.router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
+	}
+
+	// test the test: make sure the successful patch was saved
+	sanityTests := []test{
+		{
+			"ensure cancelled order is cancelled",
+			http.MethodGet,
+			"/api/orders/" + user1Order.Id,
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusOK,
+			OrderResp{
+				Cancelled,
+				allBalls,
+				user1Ticket,
+				user1Order.Id,
+			},
+			nil,
+		},
+	}
+
+	if err := runTest(sanityTests, server.router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
+	}
+}

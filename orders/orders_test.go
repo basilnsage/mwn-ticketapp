@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 )
@@ -33,7 +32,7 @@ func (f *fakeOrdersCollection) create(order Order) (string, error) {
 func (f *fakeOrdersCollection) read(id string) (*Order, error) {
 	order, ok := f.orders[id]
 	if !ok {
-		return nil, fmt.Errorf("order does not exist, id: %v", id)
+		return nil, nil
 	}
 	return &order, nil
 }
@@ -81,7 +80,7 @@ func (f *fakeOrdersCollection) update(id string, order Order) (bool, error) {
 		return false, errors.New("provided order does not match provided order ID")
 	}
 	if _, ok := f.orders[id]; !ok {
-		return false, fmt.Errorf("order does not exist, id: %v", id)
+		return false, nil
 	}
 	f.orders[id] = order
 	return true, nil
