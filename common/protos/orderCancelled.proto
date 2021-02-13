@@ -1,0 +1,18 @@
+syntax = "proto3";
+option go_package = "github.com/basilnsage/mwn-ticketapp/common/events";
+
+import "natsSubjects.proto";
+
+message OrderCancelled {
+  Subject subject = 1;
+  CancelledData data = 2;
+}
+
+message CancelledData {
+  string id = 1;
+  Ticket ticket = 2;
+  message Ticket {
+    string id = 1;
+    double price = 2;
+  }
+}
