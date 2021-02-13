@@ -3,21 +3,21 @@ package subjects
 import "errors"
 
 var protoSubjToString = map[string]string{
-	"TicketCreated": "ticket:created",
-	"TicketUpdated": "ticket:updated",
-	"OrderCreated": "order:created",
+	"TicketCreated":  "ticket:created",
+	"TicketUpdated":  "ticket:updated",
+	"OrderCreated":   "order:created",
 	"OrderCancelled": "order:cancelled",
 }
 
-var stringToProtoSubj = map[string]string {
-	"ticket:created": "TicketCreated",
-	"ticket:updated": "TicketUpdated",
-	"order:created": "OrderCreated",
+var stringToProtoSubj = map[string]string{
+	"ticket:created":  "TicketCreated",
+	"ticket:updated":  "TicketUpdated",
+	"order:created":   "OrderCreated",
 	"order:cancelled": "OrderCancelled",
 }
 
-func StringifySubject(enum int32) (string, error) {
-	protoSubj, ok := Subject_name[enum]
+func StringifySubject(enum Subject) (string, error) {
+	protoSubj, ok := Subject_name[int32(enum.Number())]
 	if !ok {
 		return "", errors.New("invalid subject")
 	}
@@ -25,11 +25,11 @@ func StringifySubject(enum int32) (string, error) {
 	return subject, nil
 }
 
-func SubjectifyString(subject string) (int32, error) {
+func SubjectifyString(subject string) (Subject, error) {
 	protoSubj, ok := stringToProtoSubj[subject]
 	if !ok {
 		return -1, errors.New("invalid subject")
 	}
 	enum, _ := Subject_value[protoSubj]
-	return enum, nil
+	return Subject(enum), nil
 }
