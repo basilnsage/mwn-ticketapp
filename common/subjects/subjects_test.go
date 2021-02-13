@@ -3,7 +3,7 @@ package subjects
 import "testing"
 
 func TestSubjects(t *testing.T) {
-	tests := map[string]struct{
+	tests := map[string]struct {
 		subj Subject
 		want string
 	}{
@@ -39,7 +39,7 @@ func TestSubjects(t *testing.T) {
 }
 
 func TestSubjectStrings(t *testing.T) {
-	tests := map[string]struct{
+	tests := map[string]struct {
 		subj string
 		want Subject
 	}{
@@ -57,8 +57,7 @@ func TestSubjectStrings(t *testing.T) {
 		},
 		"test order cancelled": {
 			"order:cancelled",
-			//Subject_ORDER_CANCELLED,
-			Subject_UNKNOWN_SUBJECT,
+			Subject_ORDER_CANCELLED,
 		},
 	}
 
