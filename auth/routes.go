@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/basilnsage/mwn-ticketapp-common/events"
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
-	"github.com/basilnsage/mwn-ticketapp/common/events"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/crypto/bcrypt"
