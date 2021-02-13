@@ -65,7 +65,6 @@ func main() {
 		MaxAge:        12 * time.Hour,
 	}))
 
-
 	// use generic error-handling middleware
 	UseUserRoutes(router, conf)
 

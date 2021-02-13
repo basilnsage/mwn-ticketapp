@@ -72,8 +72,8 @@ func (uc userColl) Read(ctx context.Context, user users.User) ([]users.User, err
 		}
 		foundUsers = append(foundUsers, users.User{
 			Email: email,
-			Hash: hash,
-			Uid: uid,
+			Hash:  hash,
+			Uid:   uid,
 		})
 	}
 	return foundUsers, nil
