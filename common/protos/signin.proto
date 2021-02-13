@@ -1,7 +1,0 @@
-syntax = "proto3";
-option go_package = "github.com/basilnsage/mwn-ticketapp/common/events";
-
-message SignIn {
-  string username = 1;
-  string password = 2;
-}

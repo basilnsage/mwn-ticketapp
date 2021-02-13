@@ -22,6 +22,8 @@ github.com/aws/aws-sdk-go v1.27.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN
 github.com/aws/aws-sdk-go-v2 v0.18.0/go.mod h1:JWVYvqSMppoMJC0x5wdwiImzgXTI9FuZwxzkQq9wy+g=
 github.com/basilnsage/mwn-ticketapp v0.0.0-20210213022547-49939b26690d h1:rBv6Rbsi9/zeaEpWwr+Gv5lVozoRr2ClxI0sH2AIR0M=
 github.com/basilnsage/mwn-ticketapp v0.0.0-20210213022547-49939b26690d/go.mod h1:O+uwqISb9iDJBqUCMMoLbBRQ67HmsAZjLdkSSsdYRas=
+github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210213203911-36eaa69cc2d3 h1:+l6ALBjWeJlVejVP2nMBKWU0MKOQltoG3EigjTC5QAc=
+github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210213203911-36eaa69cc2d3/go.mod h1:Exvh19aQXYNx8WmBUj5EszAiPdz33fOYGIfCGqrg9pg=
 github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha h1:A2sC7BImwvq7wyjLq2Lovt+09r8Api+q9gIdszO2hHo=
 github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha/go.mod h1:a5WyIk/iDLS1JWEmhUh+sO5ECVJi7bGSttmIgrFlAyQ=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=

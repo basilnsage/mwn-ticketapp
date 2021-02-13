@@ -1,9 +1,0 @@
-syntax = "proto3";
-option go_package = "github.com/basilnsage/mwn-ticketapp/common/events";
-
-message CreateUpdateTicket {
-  string title = 1;
-  double price = 2;
-  string id = 3;
-  string owner = 4;
-}

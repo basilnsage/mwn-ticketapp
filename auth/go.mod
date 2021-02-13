@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/basilnsage/mwn-ticketapp v0.0.0-20210213022547-49939b26690d
+	github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210213203911-36eaa69cc2d3
 	github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/cors v1.3.1
