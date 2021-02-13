@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/auth/users"
-	"github.com/basilnsage/mwn-ticketapp/common/protos"
+	"github.com/basilnsage/mwn-ticketapp/common/events"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type userFormData struct {
-	Username string `json:"username" binding:required`
-	Password string `json:"password" binding:required`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 func userFromForm(ctx *gin.Context) (*users.User, int, string, error) {
@@ -23,7 +23,7 @@ func userFromForm(ctx *gin.Context) (*users.User, int, string, error) {
 	err := ctx.Bind(data)
 	if err != nil {
 		return nil, http.StatusBadRequest,
-		"please provide a username and password", fmt.Errorf("ctx.Bind: %v", err)
+			"please provide a username and password", fmt.Errorf("ctx.Bind: %v", err)
 	}
 	userHash, err := bcrypt.GenerateFromPassword([]byte(data.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -41,7 +41,7 @@ func userFromPayload(ctx *gin.Context) (*users.User, int, string, error) {
 	if err != nil {
 		return nil, http.StatusBadRequest, "please provide a username and password", err
 	}
-	userProto := &protos.SignIn{}
+	userProto := &events.SignIn{}
 	if err = proto.Unmarshal(data, userProto); err != nil {
 		return nil, http.StatusBadRequest, "unable to parse provided credentials", err
 	}

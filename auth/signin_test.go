@@ -22,8 +22,8 @@ func TestSignin(t *testing.T) {
 	//}
 	user := &users.User{
 		Email: email,
-		Hash: passHash,
-		Uid: "0",
+		Hash:  passHash,
+		Uid:   "0",
 	}
 
 	payload, err := json.Marshal(&userFormData{Username: email, Password: pass})

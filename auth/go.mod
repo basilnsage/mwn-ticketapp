@@ -3,7 +3,7 @@ module github.com/basilnsage/mwn-ticketapp/auth
 go 1.15
 
 require (
-	github.com/basilnsage/mwn-ticketapp v0.0.0-20200714041703-691fb3f30688
+	github.com/basilnsage/mwn-ticketapp v0.0.0-20210213022547-49939b26690d
 	github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/cors v1.3.1
