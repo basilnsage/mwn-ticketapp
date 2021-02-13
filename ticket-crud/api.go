@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/basilnsage/mwn-ticketapp-common/events"
+	"github.com/basilnsage/mwn-ticketapp-common/subjects"
 	"github.com/basilnsage/mwn-ticketapp/middleware"
-	"github.com/basilnsage/mwn-ticketapp/ticket-crud/events"
 	prometrics "github.com/basilnsage/prometheus-gin-metrics"
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/stan.go"
@@ -21,6 +22,10 @@ type apiServer struct {
 
 func newApiServer(pass string, r *gin.Engine, crud CRUD, stan stan.Conn) (*apiServer, error) {
 	a := &apiServer{}
+
+	if err := setSubjects(); err != nil {
+		return nil, fmt.Errorf("could not set NATS subscription subjects: %v", err)
+	}
 
 	a.router = r
 	if err := a.bindRoutes(pass); err != nil {
@@ -113,8 +118,9 @@ func (a *apiServer) serveCreate(c *gin.Context, v *middleware.JWTValidator) {
 		Id:    tikId,
 	}
 
+	createTicketSubject, _ := subjects.StringifySubject(subjects.Subject_TICKET_CREATED)
 	// publish new ticket to event bus
-	if err := resp.publish(a.eBus, events.Subject{}.CreateTicket()); err != nil {
+	if err := resp.publish(a.eBus, createTicketSubject); err != nil {
 		ErrorLogger.Printf("unable to publish create ticket event: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return
@@ -222,7 +228,8 @@ func (a *apiServer) serveUpdate(c *gin.Context, v *middleware.JWTValidator) {
 		Owner: tik.Owner,
 		Id:    tik.Id,
 	}
-	if err := resp.publish(a.eBus, events.Subject{}.UpdateTicket()); err != nil {
+	updateTicketSubject, _ := subjects.StringifySubject(subjects.Subject_TICKET_UPDATED)
+	if err := resp.publish(a.eBus, updateTicketSubject); err != nil {
 		ErrorLogger.Printf("unable to publish update ticket event: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal server error"}})
 		return

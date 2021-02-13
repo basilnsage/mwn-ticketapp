@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/basilnsage/mwn-ticketapp/middleware"
-	"github.com/basilnsage/mwn-ticketapp/ticket-crud/events"
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-cmp/cmp"
 	"github.com/nats-io/nats.go"
@@ -259,7 +258,7 @@ func TestCreate(t *testing.T) {
 
 	t.Run("create ticket event publish", func(currTest *testing.T) {
 		// check that a ticket was published to our fake NATS client
-		pbBytes := fakeStan.messages[events.Subject{}.CreateTicket()][0]
+		pbBytes := fakeStan.messages[createTicketSubject][0]
 		resp, err := ticketRespFromProto(pbBytes)
 		if err != nil {
 			currTest.Fatal(err)
@@ -416,7 +415,7 @@ func TestUpdate(t *testing.T) {
 
 	t.Run("update ticket event publish", func(currTest *testing.T) {
 		// check that a ticket was published to our fake NATS client
-		pbBytes := fakeStan.messages[events.Subject{}.UpdateTicket()][0]
+		pbBytes := fakeStan.messages[updateTicketSubject][0]
 		resp, err := ticketRespFromProto(pbBytes)
 		if err != nil {
 			currTest.Fatal(err)
