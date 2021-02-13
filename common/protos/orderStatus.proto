@@ -1,0 +1,9 @@
+syntax = "proto3";
+option go_package = "github.com/basilnsage/mwn-ticketapp/common/events";
+
+enum Status {
+  Created = 0;
+  Cancelled = 1;
+  AwaitingPayment = 2;
+  Completed = 3;
+}

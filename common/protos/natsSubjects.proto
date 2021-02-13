@@ -1,0 +1,10 @@
+syntax = "proto3";
+option go_package = "github.com/basilnsage/mwn-ticketapp/common/subjects";
+
+enum Subject {
+  UNKNOWN_SUBJECT = 0;
+  TICKET_CREATED = 1;
+  TICKET_UPDATED = 2;
+  ORDER_CREATED = 3;
+  ORDER_CANCELLED = 4;
+}
