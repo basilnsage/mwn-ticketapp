@@ -145,7 +145,7 @@ func (o ordersCollection) update(id string, order Order) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if res.ModifiedCount > 0 {
+	if res.MatchedCount > 0 {
 		return true, nil
 	}
 	return false, nil

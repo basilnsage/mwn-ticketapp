@@ -3,55 +3,21 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"github.com/basilnsage/mwn-ticketapp/middleware"
-	"github.com/gin-gonic/gin"
-	"github.com/google/go-cmp/cmp"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/stan.go"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/basilnsage/mwn-ticketapp-common/events"
+	"github.com/basilnsage/mwn-ticketapp-common/subjects"
+	"github.com/basilnsage/mwn-ticketapp/middleware"
+	"github.com/gin-gonic/gin"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
-
-type fakeNatsConn struct {
-	messages map[string][][]byte
-}
-
-func newFakeNatsConn() *fakeNatsConn {
-	return &fakeNatsConn{
-		make(map[string][][]byte),
-	}
-}
-
-func (f *fakeNatsConn) Publish(subj string, data []byte) error {
-	f.messages[subj] = append(f.messages[subj], data)
-	return nil
-}
-
-func (f *fakeNatsConn) PublishAsync(subj string, data []byte, ah stan.AckHandler) (string, error) {
-	_, _, _ = subj, data, ah
-	return "", errors.New("not implemented")
-}
-
-func (f *fakeNatsConn) Subscribe(subj string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
-	_, _, _ = subj, cb, opts
-	return nil, errors.New("not implemented")
-}
-
-func (f *fakeNatsConn) QueueSubscribe(subj, qgroup string, cb stan.MsgHandler, opts ...stan.SubscriptionOption) (stan.Subscription, error) {
-	_, _, _, _ = subj, qgroup, cb, opts
-	return nil, errors.New("not implemented")
-}
-
-func (f *fakeNatsConn) Close() error {
-	return nil
-}
-
-func (f *fakeNatsConn) NatsConn() *nats.Conn {
-	return nil
-}
 
 func newTestInfra() (*apiServer, *fakeTicketsCollection, *fakeOrdersCollection, *fakeNatsConn, error) {
 	fakeTC := newFakeTicketsCollection()
@@ -65,6 +31,31 @@ func newTestInfra() (*apiServer, *fakeTicketsCollection, *fakeOrdersCollection, 
 	}
 
 	return server, fakeTC, fakeOC, fakeStan, nil
+}
+
+func TestNewApiServer(t *testing.T) {
+	t.Run("test newApiServer", func(tester *testing.T) {
+		fakeTC := newFakeTicketsCollection()
+		fakeOC := newFakeOrdersCollection()
+		fakeStan := newFakeNatsConn()
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+
+		server, err := newApiServer("password", 3*time.Second, r, fakeTC, fakeOC, fakeStan)
+		if err != nil {
+			tester.Fatalf("newApiServer: %v", err)
+		}
+		if server == nil {
+			tester.Fatal("api server is nil")
+		}
+
+		if orderCreatedSubject == "" {
+			tester.Fatal("orderCreatedSubject is empty")
+		}
+		if orderCancelledSubject == "" {
+			tester.Fatal("orderCancelledSubject is empty")
+		}
+	})
 }
 
 type test struct {
@@ -217,6 +208,70 @@ func TestPostOrder(t *testing.T) {
 	}
 }
 
+func TestPublishOrderCreated(t *testing.T) {
+	server, fakeTC, fakeOC, fakeStan, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
+	}
+
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
+
+	ticket := fakeTC.createWrapper("proto me", 1.0, 1)
+	tests := []test{
+		{
+			"order the proto me ticket",
+			http.MethodPost,
+			"/api/orders/create",
+			OrderReq{ticket.Id},
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusCreated,
+			OrderResp{
+				Created,
+				allBalls,
+				ticket,
+				"0",
+			},
+			nil,
+		},
+	}
+
+	if err := runTest(tests, server.router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
+	}
+
+	order, _ := fakeOC.read("0")
+	pbExpiresAt, _ := ptypes.TimestampProto(order.ExpiresAt)
+
+	// an event should have been published
+	// check our faked NATS conn (fakeStan) to verify this
+	eventBytes := fakeStan.messages[orderCreatedSubject][0]
+	var got events.OrderCreated
+	if err := proto.Unmarshal(eventBytes, &got); err != nil {
+		t.Fatalf("proto.Unmarshal: %v", err)
+	}
+
+	want := &events.OrderCreated{
+		Subject: subjects.Subject_ORDER_CREATED,
+		Data: &events.CreatedData{
+			Id:        order.Id,
+			Status:    events.Status_Created,
+			UserId:    order.UserId,
+			ExpiresAt: pbExpiresAt,
+			Ticket: &events.CreatedData_Ticket{
+				Id:    ticket.Id,
+				Price: ticket.Price,
+			},
+		},
+	}
+	if diff := cmp.Diff(want, &got, protocmp.Transform()); diff != "" {
+		t.Fatalf("orderCreated event: (-want +got)\n%v", diff)
+	}
+
+}
+
 func TestGetAnOrder(t *testing.T) {
 	server, fakeTC, fakeOC, _, err := newTestInfra()
 	if err != nil {
@@ -329,7 +384,7 @@ func TestGetAllOrders(t *testing.T) {
 			nil,
 		},
 		{
-			"get all orders many order",
+			"get all orders many orders",
 			http.MethodGet,
 			"/api/orders",
 			nil,
@@ -443,4 +498,58 @@ func TestCancelOrder(t *testing.T) {
 	if err := runTest(sanityTests, server.router, t); err != nil {
 		t.Fatalf("error running tests: %v", err)
 	}
+}
+
+func TestPublishOrderCancelled(t *testing.T) {
+	server, fakeTC, fakeOC, fakeStan, err := newTestInfra()
+	if err != nil {
+		t.Fatalf("unable to complete pre-test tasks: %v", err)
+	}
+
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	if err != nil {
+		t.Fatalf("unble to create test JWT: %v", err)
+	}
+
+	ticket := fakeTC.createWrapper("proto me", 1.0, 1)
+	order := fakeOC.createWrapper("1", ticket.Id, Created)
+
+	tests := []test{
+		{
+			"cancel the ticket",
+			http.MethodPatch,
+			"/api/orders/" + order.Id,
+			nil,
+			map[string]string{"auth-jwt": testUserJWT},
+			http.StatusNoContent,
+			nil,
+			nil,
+		},
+	}
+
+	if err := runTest(tests, server.router, t); err != nil {
+		t.Fatalf("error running tests: %v", err)
+	}
+
+	// an event should have been published
+	// check our faked NATS conn (fakeStan) to verify this
+	eventBytes := fakeStan.messages[orderCancelledSubject][0]
+	var got events.OrderCancelled
+	if err := proto.Unmarshal(eventBytes, &got); err != nil {
+		t.Fatalf("proto.Unmarshal: %v", err)
+	}
+
+	want := &events.OrderCancelled{
+		Subject: subjects.Subject_ORDER_CANCELLED,
+		Data: &events.CancelledData{
+			Id: order.Id,
+			Ticket: &events.CancelledData_Ticket{
+				Id: ticket.Id,
+			},
+		},
+	}
+	if diff := cmp.Diff(want, &got, protocmp.Transform()); diff != "" {
+		t.Fatalf("orderCancelled event: (-want +got)\n%v", diff)
+	}
+
 }

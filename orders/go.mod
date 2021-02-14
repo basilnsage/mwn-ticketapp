@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/aws/aws-sdk-go v1.36.7 // indirect
+	github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210214000111-67ba022dfe22
 	github.com/basilnsage/mwn-ticketapp/middleware v0.0.0-20201222181933-7a8953a61d59
 	github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha
 	github.com/gin-gonic/gin v1.6.3

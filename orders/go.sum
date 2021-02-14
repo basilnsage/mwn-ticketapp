@@ -27,6 +27,8 @@ github.com/aws/aws-sdk-go v1.34.28/go.mod h1:H7NKnBqNVzoTJpGfLrQkkD+ytBA93eiDYi/
 github.com/aws/aws-sdk-go v1.36.7 h1:XoJPAjKoqvdL531XGWxKYn5eGX/xMoXzMN5fBtoyfSY=
 github.com/aws/aws-sdk-go v1.36.7/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/aws/aws-sdk-go-v2 v0.18.0/go.mod h1:JWVYvqSMppoMJC0x5wdwiImzgXTI9FuZwxzkQq9wy+g=
+github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210214000111-67ba022dfe22 h1:GkS1nKesFHESr4LHqk8R/N7QpBEZZdRkupjUw633Jj4=
+github.com/basilnsage/mwn-ticketapp-common v0.0.0-20210214000111-67ba022dfe22/go.mod h1:Exvh19aQXYNx8WmBUj5EszAiPdz33fOYGIfCGqrg9pg=
 github.com/basilnsage/mwn-ticketapp/middleware v0.0.0-20201222181933-7a8953a61d59 h1:qPV3OubOnkKjfKfesGDOAWQQx4Dd0kdbo5calb5THBI=
 github.com/basilnsage/mwn-ticketapp/middleware v0.0.0-20201222181933-7a8953a61d59/go.mod h1:8hZeuvahPrFqZDUJXSrnB9beJP9MS1KWCFRcIOhNaAw=
 github.com/basilnsage/prometheus-gin-metrics v0.1.0-alpha h1:A2sC7BImwvq7wyjLq2Lovt+09r8Api+q9gIdszO2hHo=
