@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: crud-mongo-depl
+  name: orders-mongo-depl
 spec:
   replicas: 1
   selector:
     matchLabels:
-      service: crud-mongo
+      service: orders-mongo
   template:
     metadata:
       labels:
         app: tickets
-        service: crud-mongo
+        service: orders-mongo
     spec:
       containers:
-        - name: crud-mongo
+        - name: orders-mongo
           image: mongo
           resources:
             limits:
@@ -24,10 +24,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: crud-mongo-svc
+  name: orders-mongo-svc
 spec:
   selector:
-    service: crud-mongo
+    service: orders-mongo
   ports:
     - name: db
       protocol: TCP
