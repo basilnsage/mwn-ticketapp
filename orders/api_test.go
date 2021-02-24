@@ -90,7 +90,7 @@ func runTest(tests []test, router *gin.Engine, t *testing.T) (err error) {
 			// check resp code if expected value specified by test
 			if test.expectedCode != -1 {
 				if got, want := resp.Code, test.expectedCode; got != want {
-					currTest.Fatalf(" status code is %v, want %v", got, want)
+					currTest.Fatalf("status code is %v, want %v", got, want)
 				}
 			}
 
@@ -287,13 +287,11 @@ func TestGetAnOrder(t *testing.T) {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
 
-	_ = fakeTC.createWrapper("my order does not exist", 1.0, 1)
-	ticket2 := fakeTC.createWrapper("i am ordered by user1", 2.0, 2)
-	ticket3 := fakeTC.createWrapper("i am ordered by user2", 3.0, 3)
+	ticket1 := fakeTC.createWrapper("i am ordered by user1", 2.0, 2)
+	ticket2 := fakeTC.createWrapper("i am ordered by user2", 3.0, 3)
 
-	// skip order1; ticket1 should not have an order
-	order2 := fakeOC.createWrapper("1", ticket2.Id, Created)
-	order3 := fakeOC.createWrapper("2", ticket3.Id, Created)
+	order1 := fakeOC.createWrapper("1", ticket1.Id, Created)
+	order2 := fakeOC.createWrapper("2", ticket2.Id, Created)
 
 	tests := []test{
 		{
@@ -309,7 +307,7 @@ func TestGetAnOrder(t *testing.T) {
 		{
 			"get someone elses order",
 			http.MethodGet,
-			"/api/orders/" + order2.Id,
+			"/api/orders/" + order1.Id,
 			nil,
 			map[string]string{"auth-jwt": user2JWT},
 			http.StatusUnauthorized,
@@ -317,17 +315,17 @@ func TestGetAnOrder(t *testing.T) {
 			&ErrorResp{[]string{"unauthorized"}},
 		},
 		{
-			"get order that dne",
+			"get order",
 			http.MethodGet,
-			"/api/orders/" + order3.Id,
+			"/api/orders/" + order2.Id,
 			nil,
 			map[string]string{"auth-jwt": user2JWT},
 			http.StatusOK,
 			OrderResp{
-				order3.Status,
-				order3.ExpiresAt,
-				ticket3,
-				order3.Id,
+				order2.Status,
+				order2.ExpiresAt,
+				ticket2,
+				order2.Id,
 			},
 			nil,
 		},

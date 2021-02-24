@@ -12,19 +12,9 @@ import (
 )
 
 func TestMarshalOrderCreated(t *testing.T) {
-	ticket := Ticket{
-		"am a ticket",
-		1.0,
-		1,
-		"1",
-	}
-	order := Order{
-		"1",
-		Created,
-		allBalls,
-		"1",
-		"1",
-	}
+	ticket := Ticket{"am a ticket", 1.0, 1, "1"}
+	order := Order{"1", Created, allBalls, "1", "1"}
+
 	pbExpiresAt, err := ptypes.TimestampProto(allBalls)
 	want := &events.OrderCreated{
 		Subject: subjects.Subject_ORDER_CREATED,
@@ -56,19 +46,9 @@ func TestMarshalOrderCreated(t *testing.T) {
 }
 
 func TestMarshalOrderCancelled(t *testing.T) {
-	ticket := Ticket{
-		"am a ticket",
-		1.0,
-		1,
-		"1",
-	}
-	order := Order{
-		"1",
-		Created,
-		allBalls,
-		"1",
-		"1",
-	}
+	ticket := Ticket{"am a ticket", 1.0, 1, "1"}
+	order := Order{"1", Created, allBalls, "1", "1"}
+
 	want := &events.OrderCancelled{
 		Subject: subjects.Subject_ORDER_CANCELLED,
 		Data: &events.CancelledData{

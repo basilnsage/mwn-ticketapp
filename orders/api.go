@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/nats-io/stan.go"
 	"net/http"
 	"time"
 
 	"github.com/basilnsage/mwn-ticketapp/middleware"
 	prometrics "github.com/basilnsage/prometheus-gin-metrics"
+	"github.com/gin-gonic/gin"
+	"github.com/nats-io/stan.go"
 )
 
 type apiServer struct {
@@ -36,9 +36,7 @@ func newApiServer(pass string, orderDuration time.Duration, r *gin.Engine, tc ti
 	a.orderDuration = orderDuration
 
 	a.router = r
-	if err := a.bindRoutes(); err != nil {
-		return nil, fmt.Errorf("unable to bind routes to router: %v", err)
-	}
+	a.bindRoutes()
 
 	a.tc = tc
 	a.oc = oc
@@ -47,7 +45,7 @@ func newApiServer(pass string, orderDuration time.Duration, r *gin.Engine, tc ti
 	return a, nil
 }
 
-func (a *apiServer) bindRoutes() error {
+func (a *apiServer) bindRoutes() {
 	promRegistry := prometrics.NewRegistry()
 	a.router.Use(promRegistry.ReportDuration(
 		[]float64{0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
@@ -60,11 +58,18 @@ func (a *apiServer) bindRoutes() error {
 	ticketRoutes.GET("", userValidationMiddleware, a.getAllOrders)
 	ticketRoutes.GET("/:id", userValidationMiddleware, a.getOrder)
 	ticketRoutes.PATCH("/:id", userValidationMiddleware, a.cancelOrder)
-
-	return nil
 }
 
 func (a *apiServer) postOrder(c *gin.Context) {
+	// extract user ID from JWT
+	var userClaims middleware.UserClaims
+	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
+		c.Status(http.StatusForbidden)
+		return
+	}
+	uid := userClaims.Id
+
 	// get the ticket ID from the request
 	req := OrderReq{}
 	if err := c.BindJSON(&req); err != nil {
@@ -97,14 +102,6 @@ func (a *apiServer) postOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResp{[]string{"ticket already reserved"}})
 		return
 	}
-
-	var userClaims middleware.UserClaims
-	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
-		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
-		c.Status(http.StatusForbidden)
-		return
-	}
-	uid := userClaims.Id
 
 	// create the order
 	// by setting orderDuration == 0, we indicate that orders should expire immediately
