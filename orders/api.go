@@ -13,14 +13,16 @@ import (
 
 type apiServer struct {
 	orderDuration time.Duration
-	tc            ticketsCRUD
+	ticketsCRUD   ticketsCRUD
 	oc            ordersCRUD
-	eBus          stan.Conn
+	natsConn      stan.Conn
 	router        *gin.Engine
-	v             *middleware.JWTValidator
+	validator     *middleware.JWTValidator
 }
 
-func newApiServer(pass string, orderDuration time.Duration, r *gin.Engine, tc ticketsCRUD, oc ordersCRUD, stan stan.Conn) (*apiServer, error) {
+func newApiServer(pass string, orderDuration time.Duration, r *gin.Engine, ticketsCRUD ticketsCRUD, oc ordersCRUD,
+	natsConn stan.Conn) (*apiServer, error) {
+
 	a := &apiServer{}
 
 	if err := setOrderSubjects(); err != nil {
@@ -31,16 +33,16 @@ func newApiServer(pass string, orderDuration time.Duration, r *gin.Engine, tc ti
 	if err != nil {
 		return nil, fmt.Errorf("NewJWTValidator: %v", err)
 	}
-	a.v = jwtValidator
+	a.validator = jwtValidator
 
 	a.orderDuration = orderDuration
 
 	a.router = r
 	a.bindRoutes()
 
-	a.tc = tc
+	a.ticketsCRUD = ticketsCRUD
 	a.oc = oc
-	a.eBus = stan
+	a.natsConn = natsConn
 
 	return a, nil
 }
@@ -52,18 +54,18 @@ func (a *apiServer) bindRoutes() {
 	))
 	a.router.GET("/orders/metrics", promRegistry.DefaultHandler)
 
-	userValidationMiddleware := middleware.UserValidator(a.v, "auth-jwt")
-	ticketRoutes := a.router.Group("/api/orders")
-	ticketRoutes.POST("/create", userValidationMiddleware, a.postOrder)
-	ticketRoutes.GET("", userValidationMiddleware, a.getAllOrders)
-	ticketRoutes.GET("/:id", userValidationMiddleware, a.getOrder)
-	ticketRoutes.PATCH("/:id", userValidationMiddleware, a.cancelOrder)
+	userValidationMiddleware := middleware.UserValidator(a.validator, "auth-jwt")
+	orderRoutes := a.router.Group("/api/orders")
+	orderRoutes.POST("/create", userValidationMiddleware, a.postOrder)
+	orderRoutes.GET("", userValidationMiddleware, a.getAllOrders)
+	orderRoutes.GET("/:id", userValidationMiddleware, a.getOrder)
+	orderRoutes.PATCH("/:id", userValidationMiddleware, a.cancelOrder)
 }
 
 func (a *apiServer) postOrder(c *gin.Context) {
 	// extract user ID from JWT
 	var userClaims middleware.UserClaims
-	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+	if err := userClaims.NewFromToken(a.validator, c.GetHeader("auth-jwt")); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
 		c.Status(http.StatusForbidden)
 		return
@@ -79,7 +81,7 @@ func (a *apiServer) postOrder(c *gin.Context) {
 	ticketId := req.TicketId
 
 	// do we know about the ticket?
-	ticket, err := a.tc.read(ticketId)
+	ticket, err := a.ticketsCRUD.read(ticketId)
 	if err != nil {
 		ErrorLogger.Printf("failed to read ticket from DB: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
@@ -139,7 +141,7 @@ func (a *apiServer) postOrder(c *gin.Context) {
 	}
 
 	// publish event
-	if err := a.eBus.Publish(orderCreatedSubject, createdEventBytes); err != nil {
+	if err := a.natsConn.Publish(orderCreatedSubject, createdEventBytes); err != nil {
 		ErrorLogger.Printf("could not publish created order event: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
 		return
@@ -156,7 +158,7 @@ func (a *apiServer) postOrder(c *gin.Context) {
 func (a *apiServer) getOrder(c *gin.Context) {
 	// get user id from auth-jwt header
 	var userClaims middleware.UserClaims
-	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+	if err := userClaims.NewFromToken(a.validator, c.GetHeader("auth-jwt")); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
 		c.Status(http.StatusForbidden)
 		return
@@ -186,7 +188,7 @@ func (a *apiServer) getOrder(c *gin.Context) {
 	}
 
 	// fetch corresponding ticket
-	ticket, err := a.tc.read(order.TicketId)
+	ticket, err := a.ticketsCRUD.read(order.TicketId)
 	if err != nil {
 		ErrorLogger.Printf("failed to read ticket from DB: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
@@ -205,7 +207,7 @@ func (a *apiServer) getOrder(c *gin.Context) {
 func (a *apiServer) getAllOrders(c *gin.Context) {
 	// get user id from auth-jwt header
 	var userClaims middleware.UserClaims
-	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+	if err := userClaims.NewFromToken(a.validator, c.GetHeader("auth-jwt")); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
 		c.Status(http.StatusForbidden)
 		return
@@ -224,7 +226,7 @@ func (a *apiServer) getAllOrders(c *gin.Context) {
 	resp := make([]OrderResp, 0)
 	for _, order := range orders {
 		tid := order.TicketId
-		ticket, err := a.tc.read(tid)
+		ticket, err := a.ticketsCRUD.read(tid)
 		if err != nil {
 			ErrorLogger.Printf("error reading ticket, id: %v, error: %v", tid, err)
 			continue
@@ -244,7 +246,7 @@ func (a *apiServer) getAllOrders(c *gin.Context) {
 func (a *apiServer) cancelOrder(c *gin.Context) {
 	// get user id from jwt header
 	var userClaims middleware.UserClaims
-	if err := userClaims.NewFromToken(a.v, c.GetHeader("auth-jwt")); err != nil {
+	if err := userClaims.NewFromToken(a.validator, c.GetHeader("auth-jwt")); err != nil {
 		ErrorLogger.Printf("could not parse auth-jwt header: %v", err)
 		c.Status(http.StatusForbidden)
 		return
@@ -300,7 +302,7 @@ func (a *apiServer) cancelOrder(c *gin.Context) {
 		return
 	}
 
-	if err := a.eBus.Publish(orderCancelledSubject, eventBytes); err != nil {
+	if err := a.natsConn.Publish(orderCancelledSubject, eventBytes); err != nil {
 		ErrorLogger.Printf("unable to publish orderCancelled event: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResp{[]string{"Internal Server Error"}})
 		return

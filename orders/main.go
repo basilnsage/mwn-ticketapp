@@ -126,27 +126,32 @@ func main() {
 	gc.mongoClient = client
 	db := client.Database(dbName)
 
-	tc := newTicketCollection(db.Collection(ticketCollectionName), dbTimeout)
-	oc := newOrdersCollection(db.Collection(ordersCollectionName), dbTimeout)
+	ticketCollection := newTicketCollection(db.Collection(ticketCollectionName), dbTimeout)
+	ordersCollection := newOrdersCollection(db.Collection(ordersCollectionName), dbTimeout)
 
 	// init NATS Streaming Server connection
-	natsClient, err := stan.Connect(conf["NATS_CLUSTER_ID"], conf["NATS_CLIENT_ID"], stan.NatsURL(conf["NATS_CONN_STR"]))
+	natsConn, err := stan.Connect(conf["NATS_CLUSTER_ID"], conf["NATS_CLIENT_ID"], stan.NatsURL(conf["NATS_CONN_STR"]))
 	if err != nil {
-		ErrorLogger.Printf("stan.Connect: %v", err)
+		ErrorLogger.Printf("natsConn.Connect: %v", err)
 		gc.shutdown(1)
 	}
 	InfoLogger.Print("connected to NATS Streaming Server")
-	gc.stan = natsClient
+	gc.stan = natsConn
 
 	// create gin router and bind handlers/routes to it
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	server, err := newApiServer(conf["JWT_SIGN_KEY"], 15*time.Minute, r, tc, oc, natsClient)
+	server, err := newApiServer(conf["JWT_SIGN_KEY"], 15*time.Minute, r, ticketCollection, ordersCollection, natsConn)
 	if err != nil {
 		ErrorLogger.Printf("could not create new API server")
 		gc.shutdown(1)
 		return // this will never be called but it makes the IDE happy
 	}
+
+	//natsEventListener := newNatsListener(ticketCollection, natsConn)
+	//_ = natsEventListener.listenForEvents()
+	//_ = natsEventListener.close()
+
 	// start HTTP server and set the gin router as the server handler
 	httpServer := &http.Server{
 		Addr:    ":4000",
