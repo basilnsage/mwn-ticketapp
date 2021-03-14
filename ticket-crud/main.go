@@ -69,7 +69,7 @@ func genMainConfig() (mainConfig, []string) {
 		"NATS_CONN_STR":   "missing NATS connection string: NATS_CONN_STR",
 	}
 	for key, errStr := range envToErrString {
-		if val, ok := os.LookupEnv(key); !ok {
+		if val, ok := os.LookupEnv(key); ok {
 			conf[key] = val
 		} else {
 			missingEnvs = append(missingEnvs, errStr)
