@@ -22,6 +22,15 @@ const (
 	dbTimeout            = 3 * time.Second
 )
 
+// used env vars
+const (
+	mongoConnStr  = "MONGO_CONN_STR"
+	jwtSignKey    = "JWT_SIGN_KEY"
+	natsClusterId = "NATS_CLUSTER_ID"
+	natsClientId  = "NATS_CLIENT_ID"
+	natsConnStr   = "NATS_CONN_STR"
+)
+
 var (
 	InfoLogger *log.Logger
 	//WarningLogger *log.Logger
@@ -38,6 +47,7 @@ type groupCloser struct {
 	httpServer  *http.Server
 	stan        stan.Conn
 	mongoClient *mongo.Client
+	listener    natsListener
 }
 
 func (gc groupCloser) shutdown(code int) {
@@ -51,6 +61,11 @@ func (gc groupCloser) shutdown(code int) {
 		if err := gc.httpServer.Shutdown(ctx); err != nil {
 			panic(err)
 		}
+	}
+
+	InfoLogger.Print("shutting down the NATS listener")
+	if err := gc.listener.close(); err != nil {
+		panic(err)
 	}
 
 	InfoLogger.Print("shutting down the NATS connection")
@@ -71,26 +86,21 @@ func (gc groupCloser) shutdown(code int) {
 	os.Exit(code)
 }
 
-type mainConfig map[string]string
-
-func genMainConfig() (mainConfig, []string) {
+func validateEnvVars() []string {
 	var missingEnvs []string
-	conf := mainConfig{}
 	envToErrString := map[string]string{
-		"MONGO_CONN_STR":  "missing mongo connection: MONGO_CONN_STR",
-		"JWT_SIGN_KEY":    "missing JWT HS256 signing key: JWT_SIGN_KEY",
-		"NATS_CLUSTER_ID": "missing NATS cluster ID: NATS_CLUSTER_ID",
-		"NATS_CLIENT_ID":  "missing NATS client ID: NATS_CLIENT_ID",
-		"NATS_CONN_STR":   "missing NATS connection string: NATS_CONN_STR",
+		mongoConnStr:  "missing mongo connection: MONGO_CONN_STR",
+		jwtSignKey:    "missing JWT HS256 signing key: JWT_SIGN_KEY",
+		natsClusterId: "missing NATS cluster ID: NATS_CLUSTER_ID",
+		natsClientId:  "missing NATS client ID: NATS_CLIENT_ID",
+		natsConnStr:   "missing NATS connection string: NATS_CONN_STR",
 	}
 	for key, errStr := range envToErrString {
-		if val, ok := os.LookupEnv(key); !ok {
+		if _, ok := os.LookupEnv(key); !ok {
 			missingEnvs = append(missingEnvs, errStr)
-		} else {
-			conf[key] = val
 		}
 	}
-	return conf, missingEnvs
+	return missingEnvs
 }
 
 func main() {
@@ -98,7 +108,7 @@ func main() {
 	gc := groupCloser{}
 
 	// parse environment variables for startup info
-	conf, missingEnvs := genMainConfig()
+	missingEnvs := validateEnvVars()
 	if len(missingEnvs) > 0 {
 		for _, errStr := range missingEnvs {
 			ErrorLogger.Print(errStr)
@@ -109,7 +119,7 @@ func main() {
 	// init MongoDB collections
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-	client, err := mongo.NewClient(options.Client().ApplyURI(conf["MONGO_CONN_STR"]))
+	client, err := mongo.NewClient(options.Client().ApplyURI(os.Getenv(mongoConnStr)))
 	if err != nil {
 		ErrorLogger.Printf("mongo.NewClient: %v", err)
 		gc.shutdown(1)
@@ -130,7 +140,7 @@ func main() {
 	ordersCollection := newOrdersCollection(db.Collection(ordersCollectionName), dbTimeout)
 
 	// init NATS Streaming Server connection
-	natsConn, err := stan.Connect(conf["NATS_CLUSTER_ID"], conf["NATS_CLIENT_ID"], stan.NatsURL(conf["NATS_CONN_STR"]))
+	natsConn, err := stan.Connect(os.Getenv(natsClusterId), os.Getenv(natsClientId), stan.NatsURL(os.Getenv(natsConnStr)))
 	if err != nil {
 		ErrorLogger.Printf("natsConn.Connect: %v", err)
 		gc.shutdown(1)
@@ -141,16 +151,19 @@ func main() {
 	// create gin router and bind handlers/routes to it
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	server, err := newApiServer(conf["JWT_SIGN_KEY"], 15*time.Minute, r, ticketCollection, ordersCollection, natsConn)
+	server, err := newApiServer(os.Getenv(jwtSignKey), 15*time.Minute, r, ticketCollection, ordersCollection, natsConn)
 	if err != nil {
 		ErrorLogger.Printf("could not create new API server")
 		gc.shutdown(1)
 		return // this will never be called but it makes the IDE happy
 	}
 
-	//natsEventListener := newNatsListener(ticketCollection, natsConn)
-	//_ = natsEventListener.listenForEvents()
-	//_ = natsEventListener.close()
+	natsEventListener := newNatsListener(ticketCollection, natsConn)
+	gc.listener = natsEventListener
+	if err := natsEventListener.listenForEvents(); err != nil {
+		ErrorLogger.Printf("failed to start event listener: %v", err)
+		gc.shutdown(1)
+	}
 
 	// start HTTP server and set the gin router as the server handler
 	httpServer := &http.Server{

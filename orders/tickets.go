@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"time"
 )
 
 type Ticket struct {
@@ -18,6 +20,7 @@ type Ticket struct {
 type ticketsCRUD interface {
 	create(Ticket) (string, error)
 	read(string) (*Ticket, error)
+	update(string, Ticket) (bool, error)
 }
 
 type ticketsCollection struct {
@@ -33,7 +36,22 @@ func newTicketCollection(collection *mongo.Collection, timeout time.Duration) ti
 }
 
 func (t ticketsCollection) create(ticket Ticket) (string, error) {
-	return "", nil
+	ctx, cancel := context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
+
+	res, err := t.collection.InsertOne(ctx, ticket)
+	if err != nil {
+		return "", err
+	}
+
+	switch t := res.InsertedID.(type) {
+	case string:
+		return t, nil
+	case primitive.ObjectID:
+		return res.InsertedID.(primitive.ObjectID).Hex(), nil
+	default:
+		return "", errors.New("InsertOne resulting ID neither string nor ObjectID")
+	}
 }
 
 func (t ticketsCollection) read(ticketId string) (*Ticket, error) {
@@ -58,4 +76,41 @@ func (t ticketsCollection) read(ticketId string) (*Ticket, error) {
 	}
 
 	return &ticket, nil
+}
+
+func (t ticketsCollection) update(ticketId string, ticket Ticket) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), t.timeout)
+	defer cancel()
+
+	mongoId, err := primitive.ObjectIDFromHex(ticketId)
+	if err != nil {
+		return false, err
+	}
+
+	filter := bson.M{"_id": mongoId}
+	update := bson.M{"$set": bson.M{"title": ticket.Title, "price": ticket.Price, "version": ticket.Version}}
+	res, err := t.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return false, err
+	}
+	if res.MatchedCount > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (t Ticket) MarshalBSON() ([]byte, error) {
+	doc := bson.M{
+		"title":   t.Title,
+		"price":   t.Price,
+		"Version": t.Version,
+	}
+	if t.Id != "" {
+		if oid, err := primitive.ObjectIDFromHex(t.Id); err != nil {
+			return nil, err
+		} else {
+			doc["_id"] = oid
+		}
+	}
+	return bson.Marshal(doc)
 }

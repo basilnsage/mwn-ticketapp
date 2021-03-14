@@ -21,6 +21,20 @@ type Order struct {
 	Id        string      `bson:"_id,omitempty"`
 }
 
+type Orders []Order
+
+func (o Orders) Len() int {
+	return len(o)
+}
+
+func (o Orders) Less(i, j int) bool {
+	return o[i].Id < o[j].Id
+}
+
+func (o Orders) Swap(i, j int) {
+	o[i], o[j] = o[j], o[i]
+}
+
 type OrderReq struct {
 	TicketId string `json:"ticketId"`
 }
@@ -117,7 +131,8 @@ func (o ordersCollection) search(limit int64, ticketIds, userIds []string, statu
 	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
 	defer cancel()
 
-	cursor, err := o.collection.Find(ctx, filter, &options.FindOptions{Limit: &limit})
+	findOpts := options.Find().SetLimit(limit).SetSort(bson.M{"_id": 1})
+	cursor, err := o.collection.Find(ctx, filter, findOpts)
 	if err != nil {
 		return nil, err
 	}
