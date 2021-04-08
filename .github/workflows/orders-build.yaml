@@ -1,11 +1,11 @@
 ---
-name: build and deploy the auth service
+name: build and deploy the orders service
 on:
   push:
     branches:
     - master
     paths:
-    - 'auth/**'
+    - 'orders/**'
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -18,7 +18,7 @@ jobs:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}    
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}    
     - name: build image
-      run: docker build -t basilnsage/mwn-ticketapp.auth:latest auth/
+      run: docker build -t basilnsage/mwn-ticketapp.orders:latest auth/
     - name: publish image
-      run: docker push basilnsage/mwn-ticketapp.auth:latest
+      run: docker push basilnsage/mwn-ticketapp.orders:latest
 ...

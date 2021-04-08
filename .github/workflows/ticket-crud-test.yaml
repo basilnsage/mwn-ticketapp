@@ -1,0 +1,19 @@
+---
+name: test the ticket-crud service
+on:
+  push:
+    paths:
+    - 'ticket-crud/**'
+    
+jobs:
+  test-and-build:
+    name: test and build
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2
+    - name: vet code
+      run: cd ticket-crud && go vet && cd ${OLDPWD}
+    - name: test code
+      run: cd ticket-crud && go test && cd ${OLDPWD}
+...
