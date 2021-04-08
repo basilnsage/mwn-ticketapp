@@ -1,0 +1,19 @@
+---
+name: test the auth service
+on:
+  push:
+    paths:
+    - 'orders/**'
+    
+jobs:
+  test-and-build:
+    name: test and build
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2
+    - name: vet code
+      run: cd orders && go vet && cd ${OLDPWD}
+    - name: test code
+      run: cd orders && go test && cd ${OLDPWD}
+...

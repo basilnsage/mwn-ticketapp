@@ -1,0 +1,24 @@
+---
+name: build and deploy the ticket-crud service
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - 'ticket-crud/**'
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2
+    - name: sign in to Docker
+      run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}    
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}    
+    - name: build image
+      run: docker build -t basilnsage/mwn-ticketapp.crud:latest auth/
+    - name: publish image
+      run: docker push basilnsage/mwn-ticketapp.crud:latest
+...

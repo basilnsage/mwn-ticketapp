@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"log"
 	"os"
 	"time"
 
+	"github.com/basilnsage/mwn-ticketapp/auth/errors"
 	"github.com/basilnsage/mwn-ticketapp/auth/token"
-	"github.com/basilnsage/prometheus-gin-metrics"
+	prometrics "github.com/basilnsage/prometheus-gin-metrics"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -53,6 +53,7 @@ func main() {
 	router := gin.Default()
 
 	// config gin
+	// TODO: replace printing with a logger
 	fmt.Println("set duration middleware")
 	router.Use(metricReg.ReportDuration(nil))
 	fmt.Println("set error handling middleware")
