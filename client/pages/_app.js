@@ -1,27 +1,35 @@
 import 'bootstrap/dist/css/bootstrap.css';
 import buildClient from '../api/build-client';
-import SigninHeader from '../components/header';
+import Header from '../components/header';
 
-const appDefault = ({Component, pageProps, email}) => {
-    return (
-        <div>
-            <SigninHeader email={email}/>
-            <Component {...pageProps} />
-        </div>
+const AppComponent = ({ Component, pageProps, currentUser }) => {
+  return (
+    <div>
+      <Header currentUser={currentUser} />
+      <div className="container">
+        <Component currentUser={currentUser} {...pageProps} />
+      </div>
+    </div>
+  );
+};
+
+AppComponent.getInitialProps = async (appContext) => {
+  const client = buildClient(appContext.ctx);
+  const { data } = await client.get('/api/users/currentuser');
+
+  let pageProps = {};
+  if (appContext.Component.getInitialProps) {
+    pageProps = await appContext.Component.getInitialProps(
+      appContext.ctx,
+      client,
+      data.currentUser
     );
+  }
+
+  return {
+    pageProps,
+    ...data,
+  };
 };
 
-appDefault.getInitialProps = async (appContext) => {
-    const client = buildClient(appContext.ctx);
-    const { data } = await client.get('/api/users/whoami');
-    let pageProps = {};
-    if (appContext.Component.getInitialProps) {
-        pageProps = await appContext.Component.getInitialProps(appContext.ctx);
-    };
-    return {
-        pageProps,
-        ...data,
-    };
-};
-
-export default appDefault;
+export default AppComponent;
