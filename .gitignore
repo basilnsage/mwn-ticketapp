@@ -8,3 +8,4 @@ orders/orders
 # IDE files
 *.code-workspace
 .idea/
+*/.DS_Store
