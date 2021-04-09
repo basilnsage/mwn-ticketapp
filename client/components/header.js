@@ -1,33 +1,32 @@
 import Link from 'next/link';
 
-export default ({ currentUser }) => {
-  const links = [
-    !currentUser && { label: 'Sign Up', href: '/auth/signup' },
-    !currentUser && { label: 'Sign In', href: '/auth/signin' },
-    currentUser && { label: 'Sell Tickets', href: '/tickets/new' },
-    currentUser && { label: 'My Orders', href: '/orders' },
-    currentUser && { label: 'Sign Out', href: '/auth/signout' },
-  ]
-    .filter((linkConfig) => linkConfig)
+const headerDefault = ({ email }) => {
+    let links = [
+        !email && { label: 'Sign up', href: '/auth/signup' },
+        !email && { label: 'Sign in', href: '/auth/signin' },
+        email && { label: 'Sign out', href: '/auth/signout' },
+    ]
+    .filter(linkConfig => linkConfig)
     .map(({ label, href }) => {
-      return (
-        <li key={href} className="nav-item">
-          <Link href={href}>
-            <a className="nav-link">{label}</a>
-          </Link>
-        </li>
-      );
+        return <li key={href} className="nav-item">
+            <Link href={href}>
+                <a className="nav-link">{label}</a>
+            </Link>
+        </li>;
     });
+    return (
+        <nav className="navbar navbar-light bg-light">
+            <Link href="/">
+                <a className="navbar-brand">Tickets</a>
+            </Link>
 
-  return (
-    <nav className="navbar navbar-light bg-light">
-      <Link href="/">
-        <a className="navbar-brand">GitTix</a>
-      </Link>
-
-      <div className="d-flex justify-content-end">
-        <ul className="nav d-flex align-items-center">{links}</ul>
-      </div>
-    </nav>
-  );
+            <div className="d-flex justify-content-end">
+                <ul className="nav d-flex align-items-center">
+                    {links}
+                </ul>
+            </div>
+        </nav>
+    );
 };
+
+export default headerDefault;

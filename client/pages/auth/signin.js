@@ -1,24 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Router from 'next/router';
 import useRequest from '../../hooks/use-request';
 
-export default () => {
+const signinDefault = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { doRequest, errors } = useRequest({
     url: '/api/users/signin',
     method: 'post',
     body: {
-      email,
-      password
+        username: email,
+        password: password
     },
-    onSuccess: () => Router.push('/')
+    onSuccess: () => {
+        Router.push('/');
+    },
   });
 
   const onSubmit = async event => {
     event.preventDefault();
-
-    await doRequest();
+    doRequest();
   };
 
   return (
@@ -46,3 +47,5 @@ export default () => {
     </form>
   );
 };
+
+export default signinDefault;
