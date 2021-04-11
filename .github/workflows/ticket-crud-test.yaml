@@ -4,7 +4,6 @@ on:
   push:
     paths:
     - 'ticket-crud/**'
-    
 jobs:
   test-and-build:
     name: test and build

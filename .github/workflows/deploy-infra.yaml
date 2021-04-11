@@ -5,8 +5,8 @@ on:
     branches:
     - master
     - setup-github-actions
-    # paths:
-    # - 'infra/**'
+    paths:
+    - 'infra/**'
 jobs:
   update-cluster:
     runs-on: ubuntu-latest
