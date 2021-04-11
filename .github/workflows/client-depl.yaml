@@ -1,11 +1,11 @@
 ---
-name: build and deploy the orders service
+name: build and deploy the client service
 on:
   push:
     branches:
     - master
     paths:
-    - 'orders/**'
+    - 'client/**'
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -18,9 +18,9 @@ jobs:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}    
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}    
     - name: build image
-      run: docker build -t basilnsage/mwn-ticketapp.orders:latest auth/
+      run: docker build -t basilnsage/mwn-ticketapp.client:latest client/
     - name: publish image
-      run: docker push basilnsage/mwn-ticketapp.orders:latest
-    - name: update orders service
-      run: kubectl rollout restart deployment orders-depl
+      run: docker push basilnsage/mwn-ticketapp.client:latest
+    - name: update client service
+      run: kubectl rollout restart deployment client-depl
 ...

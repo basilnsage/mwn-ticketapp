@@ -17,11 +17,10 @@ spec:
       containers:
         - name: crud
           image: basilnsage/mwn-ticketapp.crud:latest
-          imagePullPolicy: Never
           resources:
             limits:
-              memory: 256Mi
-              cpu: 500m 
+              memory: 128Mi
+              cpu: 125m 
           env:
             - name: MONGO_CONN_STR
               value: mongodb://crud-mongo-svc:27017

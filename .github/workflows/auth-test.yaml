@@ -4,7 +4,6 @@ on:
   push:
     paths:
     - 'auth/**'
-    
 jobs:
   test-and-build:
     name: test and build

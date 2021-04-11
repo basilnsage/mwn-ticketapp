@@ -21,4 +21,6 @@ jobs:
       run: docker build -t basilnsage/mwn-ticketapp.auth:latest auth/
     - name: publish image
       run: docker push basilnsage/mwn-ticketapp.auth:latest
+    - name: update auth service
+      run: kubectl rollout restart deployment auth-depl
 ...

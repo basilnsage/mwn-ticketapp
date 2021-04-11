@@ -17,11 +17,10 @@ spec:
       containers:
         - name: orders
           image: basilnsage/mwn-ticketapp.orders:latest
-          imagePullPolicy: Never
           resources:
             limits:
-              memory: 256Mi
-              cpu: 500m 
+              memory: 128Mi
+              cpu: 125m 
           env:
             - name: MONGO_CONN_STR
               value: mongodb://orders-mongo-svc:27017

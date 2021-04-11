@@ -16,11 +16,6 @@ spec:
       containers:
         - name: client
           image: basilnsage/mwn-ticketapp.client:latest
-          imagePullPolicy: Never
-          resources:
-            limits:
-              memory: 256Mi
-              cpu: 500m 
 ---
 apiVersion: v1
 kind: Service
