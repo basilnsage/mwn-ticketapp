@@ -1,0 +1,24 @@
+---
+name: update the k8s cluster
+on:
+  push:
+    branches:
+    - master
+    - setup-github-actions
+    # paths:
+    # - 'infra/**'
+jobs:
+  update-cluster:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v2
+    - name: install doctl CLI tool
+      uses: digitalocean/action-doctl@v2
+      with: # input vars for digitalocean/action-doctl@v2 action
+        token: ${{ secrets.DO_ACCESS_TOKEN }} # made available as the INPUT_TOKEN env var
+    - name: set kubectl context
+      run: doctl kubernetes cluster kubeconfig save 2f69198b-6f3f-44a6-94cc-fc19cdf1a023
+    - name: apply manifests
+      run: kubectl apply -f infra/k8s/ && kubectl apply -f infra/k8s/prod/
+...
