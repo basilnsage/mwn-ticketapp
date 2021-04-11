@@ -4,7 +4,6 @@ on:
   push:
     branches:
     - master
-    - setup-github-actions
     paths:
     - 'infra/**'
 jobs:
