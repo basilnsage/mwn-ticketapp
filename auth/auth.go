@@ -75,5 +75,4 @@ func main() {
 	} else {
 		log.Print("gin server running and waiting for requests")
 	}
-	// dumb comment
 }
