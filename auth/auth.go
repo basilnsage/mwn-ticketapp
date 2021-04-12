@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -53,10 +52,9 @@ func main() {
 	router := gin.Default()
 
 	// config gin
-	// TODO: replace printing with a logger
-	fmt.Println("set duration middleware")
+	log.Println("set duration middleware")
 	router.Use(metricReg.ReportDuration(nil))
-	fmt.Println("set error handling middleware")
+	log.Println("set error handling middleware")
 	router.Use(errors.HandleErrors())
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{"http://localhost:*"},

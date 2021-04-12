@@ -1,7 +1,7 @@
 ---
 name: test the ticket-crud service
 on:
-  push:
+  pull_request:
     paths:
     - 'ticket-crud/**'
 jobs:
