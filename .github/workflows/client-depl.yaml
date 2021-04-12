@@ -21,6 +21,8 @@ jobs:
       run: docker build -t basilnsage/mwn-ticketapp.client:latest client/
     - name: publish image
       run: docker push basilnsage/mwn-ticketapp.client:latest
+    - name: set kubectl context
+      run: doctl kubernetes cluster kubeconfig save 2f69198b-6f3f-44a6-94cc-fc19cdf1a023
     - name: update client service
       run: kubectl rollout restart deployment client-depl
 ...
