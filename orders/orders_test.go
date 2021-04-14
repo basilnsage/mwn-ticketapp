@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -53,7 +54,7 @@ func (f *fakeOrdersCollection) search(limit int64, ticketIds, userIds []string, 
 		statusMap[s.String()] = struct{}{}
 	}
 
-	var res []Order
+	var res Orders
 	for _, order := range f.orders {
 		if limit > 0 && len(res) > int(limit) {
 			break
@@ -72,6 +73,7 @@ func (f *fakeOrdersCollection) search(limit int64, ticketIds, userIds []string, 
 			res = append(res, order)
 		}
 	}
+	sort.Sort(res)
 	return res, nil
 }
 

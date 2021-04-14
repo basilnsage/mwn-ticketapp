@@ -14,7 +14,7 @@ type CRUD interface {
 	Create(string, float64, string) (string, error)
 	ReadOne(string) (*TicketResp, error)
 	ReadAll() ([]TicketResp, error)
-	Update(string, string, float64) (bool, error)
+	Update(string, string, float64) (bool, bool, error)
 	Closer
 }
 
@@ -93,25 +93,24 @@ func (c *MongoColl) ReadAll() ([]TicketResp, error) {
 	return results, nil
 }
 
-func (c *MongoColl) Update(id string, title string, price float64) (bool, error) {
+func (c *MongoColl) Update(id string, title string, price float64) (isMatch bool, isMod bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	// convert hex ID string to mongo ObjectID
 	objId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return false, err
+		return isMatch, isMod, err
 	}
 
 	res, err := c.coll.UpdateOne(ctx, bson.M{"_id": objId}, bson.M{"$set": bson.M{"title": title, "price": price}})
 	if err != nil {
-		return false, err
+		return isMatch, isMod, err
 	}
-	if res.MatchedCount == 0 || res.ModifiedCount == 0 {
-		return false, nil
-	}
-
-	return true, nil
+	isMatch = res.MatchedCount > 0
+	isMod = res.ModifiedCount > 0
+	err = nil
+	return isMatch, isMod, err
 }
 
 func (c *MongoColl) Close(ctx context.Context) error {

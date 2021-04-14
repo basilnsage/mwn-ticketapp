@@ -61,7 +61,7 @@ func (a *apiServer) bindRoutes(jwtKey string) error {
 	)
 	ticketRoutes.GET("", a.serveReadAll)
 	ticketRoutes.GET("/:id", a.serveReadOne)
-	ticketRoutes.PUT(
+	ticketRoutes.PATCH(
 		"/:id",
 		userValidationMiddleware,
 		func(c *gin.Context) {
@@ -118,6 +118,7 @@ func (a *apiServer) serveCreate(c *gin.Context, v *middleware.JWTValidator) {
 		Id:    tikId,
 	}
 
+	InfoLogger.Print("publishing ticket created event")
 	createTicketSubject, _ := subjects.StringifySubject(subjects.Subject_TICKET_CREATED)
 	// publish new ticket to event bus
 	if err := resp.publish(a.eBus, createTicketSubject); err != nil {
@@ -210,10 +211,14 @@ func (a *apiServer) serveUpdate(c *gin.Context, v *middleware.JWTValidator) {
 		return
 	}
 
-	ok, err := a.db.Update(id, tikReq.Title, tikReq.Price)
-	if !ok {
-		WarningLogger.Printf("no DB record modified")
+	isMatch, isMod, err := a.db.Update(id, tikReq.Title, tikReq.Price)
+	if !isMatch {
+		WarningLogger.Printf("attempted to update non-existent DB record")
 		c.Status(http.StatusNotFound)
+		return
+	}
+	if !isMod {
+		c.Status(http.StatusNoContent)
 		return
 	}
 	if err != nil {
@@ -228,6 +233,8 @@ func (a *apiServer) serveUpdate(c *gin.Context, v *middleware.JWTValidator) {
 		Owner: tik.Owner,
 		Id:    tik.Id,
 	}
+
+	InfoLogger.Print("publishing ticket updated event")
 	updateTicketSubject, _ := subjects.StringifySubject(subjects.Subject_TICKET_UPDATED)
 	if err := resp.publish(a.eBus, updateTicketSubject); err != nil {
 		ErrorLogger.Printf("unable to publish update ticket event: %v", err)

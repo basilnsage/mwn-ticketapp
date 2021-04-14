@@ -14,15 +14,15 @@ require (
 	github.com/klauspost/compress v1.11.3 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/nats-io/jwt v1.2.2 // indirect
-	github.com/nats-io/nats-streaming-server v0.20.0 // indirect
+	github.com/nats-io/nats-streaming-server v0.20.0
 	github.com/nats-io/nats.go v1.10.0
 	github.com/nats-io/stan.go v0.8.1
 	github.com/prometheus/client_golang v1.9.0 // indirect
 	github.com/ugorji/go v1.2.2 // indirect
 	go.mongodb.org/mongo-driver v1.4.4
-	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
+	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
 	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a // indirect
-	golang.org/x/sys v0.0.0-20201221093633-bc327ba9c2f0 // indirect
+	golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073 // indirect
 	golang.org/x/text v0.3.4 // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect

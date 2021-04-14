@@ -56,15 +56,16 @@ func (f *fakeMongoCollection) ReadAll() ([]TicketResp, error) {
 	return resp, nil
 }
 
-func (f *fakeMongoCollection) Update(id string, title string, price float64) (bool, error) {
+func (f *fakeMongoCollection) Update(id string, title string, price float64) (bool, bool, error) {
 	item, ok := f.tickets[id]
 	if !ok {
-		return false, errors.New("no ticket with matching ID found")
+		return false, false, errors.New("no ticket with matching ID found")
 	}
+	isMod := !(item.Title == title && item.Price == price)
 	item.Title = title
 	item.Price = price
 	f.tickets[id] = item
-	return true, nil
+	return true, isMod, nil
 }
 
 func (f *fakeMongoCollection) Close(ctx context.Context) error {
@@ -369,7 +370,7 @@ func TestUpdate(t *testing.T) {
 		},
 		{
 			"unauth update",
-			http.MethodPut,
+			http.MethodPatch,
 			"/api/tickets/0",
 			TicketReq{"test update", 2.0},
 			map[string]string{"auth-jwt": badUserJWT},
@@ -379,7 +380,7 @@ func TestUpdate(t *testing.T) {
 		},
 		{
 			"malformed update",
-			http.MethodPut,
+			http.MethodPatch,
 			"/api/tickets/0",
 			TicketReq{"", -1.0},
 			map[string]string{"auth-jwt": testUserJWT},
@@ -389,7 +390,7 @@ func TestUpdate(t *testing.T) {
 		},
 		{
 			"successful update",
-			http.MethodPut,
+			http.MethodPatch,
 			"/api/tickets/0",
 			TicketReq{"this should be new", 10.0},
 			map[string]string{"auth-jwt": testUserJWT},

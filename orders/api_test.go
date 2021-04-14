@@ -146,7 +146,7 @@ func TestPostOrder(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestPublishOrderCreated(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
@@ -278,11 +278,11 @@ func TestGetAnOrder(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	user1JWT, err := middleware.NewUserClaims("user1@example.com", "1").Tokenize(server.v)
+	user1JWT, err := middleware.NewUserClaims("user1@example.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
-	user2JWT, err := middleware.NewUserClaims("user2@example.com", "2").Tokenize(server.v)
+	user2JWT, err := middleware.NewUserClaims("user2@example.com", "2").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
@@ -342,15 +342,15 @@ func TestGetAllOrders(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	user1JWT, err := middleware.NewUserClaims("user1@example.com", "1").Tokenize(server.v)
+	user1JWT, err := middleware.NewUserClaims("user1@example.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
-	user2JWT, err := middleware.NewUserClaims("user2@example.com", "2").Tokenize(server.v)
+	user2JWT, err := middleware.NewUserClaims("user2@example.com", "2").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
-	user3JWT, err := middleware.NewUserClaims("user3@example.com", "3").Tokenize(server.v)
+	user3JWT, err := middleware.NewUserClaims("user3@example.com", "3").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestCancelOrder(t *testing.T) {
 		t.Fatalf("unable to init new server: %v", err)
 	}
 
-	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestPublishOrderCancelled(t *testing.T) {
 		t.Fatalf("unable to complete pre-test tasks: %v", err)
 	}
 
-	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.v)
+	testUserJWT, err := middleware.NewUserClaims("foo@bar.com", "1").Tokenize(server.validator)
 	if err != nil {
 		t.Fatalf("unble to create test JWT: %v", err)
 	}
