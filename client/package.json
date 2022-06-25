@@ -13,7 +13,7 @@
     "axios": "^0.21.1",
     "bootstrap": "^4.5.2",
     "next": "^10.0.3",
-    "node-fetch": "^2.6.1",
+    "node-fetch": "^2.6.7",
     "protobufjs": "~6.10.1",
     "react": "^16.13.1",
     "react-dom": "^16.13.1"
